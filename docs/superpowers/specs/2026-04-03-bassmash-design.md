@@ -98,7 +98,7 @@ Source -> EQ (3-band BiquadFilters) -> Distortion (WaveShaperNode) -> Delay (Del
 
 ### MP3 Export
 
-`OfflineAudioContext` renders the full arrangement. Resulting buffer sent to companion server, which encodes to MP3 via ffmpeg.
+`OfflineAudioContext` renders the full arrangement. Resulting PCM audio buffer is encoded to WAV in the browser and POSTed to the companion server as a binary blob, which encodes it to MP3 via ffmpeg and writes it to the project folder.
 
 ## UI Layout (Ableton-style)
 
