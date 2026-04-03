@@ -1,0 +1,12 @@
+{
+  "name": "bassmash",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run setup && bun run server",
+    "setup": "uv sync --all-extras",
+    "server": "uv run uvicorn server.main:app --port 8000 --reload",
+    "test": "uv run python -m pytest server/test_routes.py -v",
+    "generate-kit": "python3 scripts/generate-kit.py"
+  }
+}
