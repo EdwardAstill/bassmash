@@ -112,8 +112,18 @@ async function loadProject(name) {
   await sampler.preloadProject();
 }
 
-document.addEventListener('click', function firstClick() {
-  document.removeEventListener('click', firstClick);
-  init();
-}, { once: true });
-init();
+// AudioContext requires user gesture in most browsers
+let initialized = false;
+async function safeInit() {
+  if (initialized) return;
+  initialized = true;
+  await init();
+}
+
+document.addEventListener('click', safeInit, { once: true });
+// Also try on DOMContentLoaded in case AudioContext is allowed
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', safeInit);
+} else {
+  safeInit();
+}

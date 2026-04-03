@@ -1,9 +1,6 @@
 export function setupCanvas(canvas) {
   const dpr = window.devicePixelRatio || 1;
-  const parent = canvas.parentElement;
-  if (!parent) return { ctx: canvas.getContext('2d'), width: 0, height: 0 };
-  const rect = parent.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) return { ctx: canvas.getContext('2d'), width: 0, height: 0 };
+  const rect = canvas.parentElement.getBoundingClientRect();
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
   canvas.style.width = rect.width + 'px';
