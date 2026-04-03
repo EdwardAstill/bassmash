@@ -82,6 +82,11 @@ body {
 .spacer { flex: 1; }
 #btn-export { background: var(--accent); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
 #btn-export:hover { opacity: 0.8; }
+.add-track-btn {
+  background: var(--bg-panel); border: 1px solid var(--accent); color: var(--accent);
+  padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;
+}
+.add-track-btn:hover { background: var(--accent); color: white; }
 
 /* Editor tabs */
 .editor-tabs { display: flex; gap: 2px; padding: 4px 4px 0; background: var(--bg-secondary); }
