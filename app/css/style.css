@@ -19,6 +19,11 @@ html, body {
   overflow: hidden;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 #topbar {
   height: 48px;
   background: var(--bg-secondary);
@@ -49,6 +54,8 @@ html, body {
   border-right: 1px solid var(--border);
   overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 #mixer {
@@ -58,7 +65,44 @@ html, body {
   padding: 8px;
 }
 
-body {
-  display: flex;
-  flex-direction: column;
+/* Top bar */
+.transport { display: flex; gap: 4px; }
+.transport button {
+  background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-primary);
+  width: 32px; height: 32px; border-radius: 4px; cursor: pointer; font-size: 14px;
 }
+.transport button:hover { background: var(--accent); }
+.bpm-control, .time-sig, .synth-mode { display: flex; align-items: center; gap: 6px; }
+.bpm-control label, .time-sig label, .synth-mode label { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; }
+#bpm-input { width: 50px; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); text-align: center; border-radius: 3px; padding: 4px; }
+#synth-mode-select { background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); border-radius: 3px; padding: 4px; }
+.project-info { display: flex; align-items: center; gap: 6px; }
+#project-name { color: var(--text-secondary); }
+#save-indicator { color: var(--accent); font-weight: bold; }
+.spacer { flex: 1; }
+#btn-export { background: var(--accent); border: none; color: white; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#btn-export:hover { opacity: 0.8; }
+
+/* Editor tabs */
+.editor-tabs { display: flex; gap: 2px; padding: 4px 4px 0; background: var(--bg-secondary); }
+.tab { background: var(--bg-panel); border: 1px solid var(--border); border-bottom: none; color: var(--text-secondary); padding: 4px 12px; border-radius: 4px 4px 0 0; cursor: pointer; font-size: 11px; }
+.tab.active { background: var(--bg-panel); color: var(--accent); border-color: var(--accent); }
+.editor-content { flex: 1; position: relative; overflow: hidden; }
+
+/* Mixer panel */
+.mixer-channels { display: flex; gap: 6px; height: 100%; padding: 4px; }
+.mixer-channel { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 50px; padding: 4px; background: var(--bg-secondary); border-radius: 4px; }
+.mixer-channel.master { background: #1a1a2e; }
+.channel-name { font-size: 10px; color: var(--text-secondary); text-align: center; }
+.channel-controls { display: flex; gap: 2px; }
+.mute-btn, .solo-btn { width: 20px; height: 18px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-secondary); font-size: 10px; cursor: pointer; border-radius: 2px; }
+.mute-btn.active { background: var(--accent); color: white; }
+.solo-btn.active { background: #2ecc71; color: white; }
+.fader-container { flex: 1; display: flex; align-items: center; }
+.fader { writing-mode: vertical-lr; direction: rtl; height: 80px; width: 20px; accent-color: var(--accent); }
+.pan-container { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pan-container label { font-size: 9px; color: var(--text-secondary); }
+.pan { width: 44px; accent-color: var(--text-secondary); }
+.fx-toggles { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+.fx-btn { font-size: 8px; padding: 2px 4px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-secondary); cursor: pointer; border-radius: 2px; }
+.fx-btn.active { background: var(--accent); color: white; }
