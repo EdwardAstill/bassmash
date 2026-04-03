@@ -1,12 +1,14 @@
 import json
+import subprocess
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api")
 
 PROJECTS_DIR = Path.home() / "bassmash-projects"
+KIT_DIR = Path(__file__).parent.parent / "kit"
 
 
 def _ensure_projects_dir():
@@ -81,3 +83,41 @@ def get_sample(name: str, filename: str):
     if not sample_path.exists():
         raise HTTPException(404, "Sample not found")
     return FileResponse(sample_path, media_type="audio/wav")
+
+
+@router.get("/kit")
+def list_kit():
+    if not KIT_DIR.exists():
+        return []
+    return [f.name for f in sorted(KIT_DIR.iterdir()) if f.suffix in (".wav", ".mp3")]
+
+
+@router.get("/kit/{filename}")
+def get_kit_sample(filename: str):
+    sample_path = KIT_DIR / filename
+    if not sample_path.exists():
+        raise HTTPException(404, "Kit sample not found")
+    return FileResponse(sample_path, media_type="audio/wav")
+
+
+@router.post("/projects/{name}/export")
+async def export_mp3(name: str, request: Request):
+    project_dir = PROJECTS_DIR / name
+    if not project_dir.exists():
+        raise HTTPException(404, "Project not found")
+    wav_data = await request.body()
+    wav_path = project_dir / "export.wav"
+    mp3_path = project_dir / "export.mp3"
+    wav_path.write_bytes(wav_data)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(wav_path), "-b:a", "192k", str(mp3_path)],
+            check=True, capture_output=True,
+        )
+    except FileNotFoundError:
+        raise HTTPException(500, "ffmpeg not found — install ffmpeg to export MP3")
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"ffmpeg error: {e.stderr.decode()}")
+    finally:
+        wav_path.unlink(missing_ok=True)
+    return {"path": str(mp3_path), "filename": "export.mp3"}

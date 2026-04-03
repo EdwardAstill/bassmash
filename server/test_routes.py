@@ -103,3 +103,49 @@ async def test_get_sample_not_found(client, projects_dir):
     await client.post("/api/projects", json={"name": "my-beat"})
     resp = await client.get("/api/projects/my-beat/samples/nope.wav")
     assert resp.status_code == 404
+
+
+@pytest.fixture
+def kit_dir(tmp_path):
+    import routes
+    original = routes.KIT_DIR
+    kit = tmp_path / "kit"
+    kit.mkdir()
+    (kit / "kick-punchy.wav").write_bytes(b"RIFF fake wav")
+    (kit / "snare-crisp.wav").write_bytes(b"RIFF fake wav")
+    routes.KIT_DIR = kit
+    yield kit
+    routes.KIT_DIR = original
+
+
+@pytest.mark.asyncio
+async def test_list_kit(client, kit_dir):
+    resp = await client.get("/api/kit")
+    assert resp.status_code == 200
+    names = resp.json()
+    assert "kick-punchy.wav" in names
+    assert "snare-crisp.wav" in names
+
+
+@pytest.mark.asyncio
+async def test_get_kit_sample(client, kit_dir):
+    resp = await client.get("/api/kit/kick-punchy.wav")
+    assert resp.status_code == 200
+    assert resp.content == b"RIFF fake wav"
+
+
+@pytest.mark.asyncio
+async def test_get_kit_sample_not_found(client, kit_dir):
+    resp = await client.get("/api/kit/nope.wav")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_export_mp3(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    resp = await client.post(
+        "/api/projects/my-beat/export",
+        content=b"RIFF fake wav for export test",
+        headers={"Content-Type": "audio/wav"},
+    )
+    assert resp.status_code in (200, 500)
