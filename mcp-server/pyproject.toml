@@ -1,0 +1,14 @@
+[project]
+name = "bassmash-mcp"
+version = "0.1.0"
+description = "MCP server for Bassmash DAW — generate beats from prompts and replicate audio"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=3.0.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "numpy>=1.24.0",
+]
+
+[project.scripts]
+bassmash-mcp = "server:main"

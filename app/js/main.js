@@ -71,21 +71,36 @@ async function showProjectPicker() {
   const projects = await api.listProjects();
   const dialog = document.createElement('div');
   dialog.id = 'project-picker';
-  dialog.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  dialog.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(6,8,16,0.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:1000;';
   dialog.innerHTML = `
-    <div style="background:var(--bg-secondary);padding:24px;border-radius:8px;min-width:300px;">
-      <h2 style="color:var(--accent);margin-bottom:16px;">Bassmash</h2>
-      <div style="margin-bottom:16px;">
-        <input id="new-project-name" placeholder="New project name..."
-          style="width:100%;padding:8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);border-radius:4px;">
+    <div style="background:linear-gradient(135deg, #1a2236, #141c2e);padding:32px;border-radius:12px;min-width:360px;max-width:420px;border:1px solid rgba(255,255,255,0.06);box-shadow:0 24px 64px rgba(0,0,0,0.5),0 0 0 1px rgba(240,66,93,0.1);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+        <div style="width:36px;height:36px;background:linear-gradient(135deg,#f0425d,#b83349);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 12px rgba(240,66,93,0.3);">B</div>
+        <div>
+          <h2 style="color:#e8ecf4;font-family:'DM Sans',system-ui;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Bassmash</h2>
+          <div style="color:#4b5672;font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:1px;text-transform:uppercase;">Beat Studio</div>
+        </div>
       </div>
-      <button id="create-project-btn" style="background:var(--accent);color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;margin-bottom:16px;">Create New Project</button>
+      <div style="margin-bottom:12px;">
+        <input id="new-project-name" placeholder="Project name..."
+          style="width:100%;padding:10px 14px;background:#0a0e1a;border:1px solid rgba(255,255,255,0.06);color:#e8ecf4;border-radius:6px;font-family:'DM Sans',system-ui;font-size:13px;outline:none;transition:border-color 0.15s;"
+          onfocus="this.style.borderColor='#f0425d';this.style.boxShadow='0 0 12px rgba(240,66,93,0.2)'"
+          onblur="this.style.borderColor='rgba(255,255,255,0.06)';this.style.boxShadow='none'">
+      </div>
+      <button id="create-project-btn" style="width:100%;background:linear-gradient(135deg,#f0425d,#b83349);color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-family:'DM Sans',system-ui;font-size:13px;font-weight:700;letter-spacing:0.3px;box-shadow:0 4px 16px rgba(240,66,93,0.25);transition:all 0.15s;"
+        onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(240,66,93,0.35)'"
+        onmouseleave="this.style.transform='none';this.style.boxShadow='0 4px 16px rgba(240,66,93,0.25)'"
+      >Create New Project</button>
       ${projects.length > 0 ? `
-        <h3 style="color:var(--text-secondary);margin-bottom:8px;">Open Existing</h3>
-        <div style="max-height:200px;overflow-y:auto;">
-          ${projects.map(name => `
-            <div class="project-item" data-name="${name}" style="padding:8px;cursor:pointer;border-bottom:1px solid var(--border);color:var(--text-primary);">${name}</div>
-          `).join('')}
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+          <div style="color:#4b5672;font-size:9px;font-family:'JetBrains Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">Recent Projects</div>
+          <div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
+            ${projects.map(name => `
+              <div class="project-item" data-name="${name}" style="padding:10px 12px;cursor:pointer;color:#8b97b5;border-radius:6px;font-weight:500;transition:all 0.1s;display:flex;align-items:center;gap:8px;">
+                <span style="color:#4b5672;font-size:12px;">&#9835;</span> ${name}
+              </div>
+            `).join('')}
+          </div>
         </div>
       ` : ''}
     </div>
@@ -100,8 +115,8 @@ async function showProjectPicker() {
   });
   dialog.querySelectorAll('.project-item').forEach(el => {
     el.addEventListener('click', async () => { await loadProject(el.dataset.name); dialog.remove(); });
-    el.addEventListener('mouseenter', () => el.style.background = 'var(--bg-panel)');
-    el.addEventListener('mouseleave', () => el.style.background = 'transparent');
+    el.addEventListener('mouseenter', () => { el.style.background = '#1e2940'; el.style.color = '#e8ecf4'; });
+    el.addEventListener('mouseleave', () => { el.style.background = 'transparent'; el.style.color = '#8b97b5'; });
   });
 }
 
@@ -110,6 +125,10 @@ async function loadProject(name) {
   store.load(name, data);
   for (const track of data.tracks) mixer.createChannel(track.name);
   await sampler.preloadProject();
+  if (data.patterns && data.patterns.length > 0) {
+    store.selectedPattern = 0;
+    store.emit('patternSelected', 0);
+  }
 }
 
 // AudioContext requires user gesture in most browsers

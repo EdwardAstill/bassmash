@@ -61,10 +61,10 @@ export function initMixerPanel() {
         const data = mixer.getMeterData(); let sum = 0;
         for (let i = 0; i < data.length; i++) { const val = (data[i] - 128) / 128; sum += val * val; }
         const rms = Math.sqrt(sum / data.length); const level = Math.min(1, rms * 3);
-        mCtx.fillStyle = '#1a1a2e'; mCtx.fillRect(0, 0, 30, 120);
+        mCtx.fillStyle = '#0a0e1a'; mCtx.fillRect(0, 0, 30, 120);
         const h = level * 120;
         const gradient = mCtx.createLinearGradient(0, 120 - h, 0, 120);
-        gradient.addColorStop(0, level > 0.8 ? '#e94560' : '#2ecc71'); gradient.addColorStop(1, '#533483');
+        gradient.addColorStop(0, level > 0.8 ? '#f0425d' : '#34d399'); gradient.addColorStop(1, '#6366f1');
         mCtx.fillStyle = gradient; mCtx.fillRect(4, 120 - h, 22, h);
         requestAnimationFrame(drawMeter);
       }

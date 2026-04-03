@@ -27,11 +27,12 @@ class AudioEngine {
 
   /** Get the loop length in 16th notes based on arrangement, or default 16 (1 bar) */
   _getLoopLength() {
+    if (store.loopEndOverride != null) return store.loopEndOverride * 4;
     const arrangement = store.data.arrangement;
-    if (arrangement.length === 0) return 16; // 1 bar default
+    if (arrangement.length === 0) return 16;
     let maxEnd = 0;
     for (const clip of arrangement) {
-      const end = (clip.startBeat + clip.lengthBeats) * 4; // beats to 16th notes
+      const end = (clip.startBeat + clip.lengthBeats) * 4;
       if (end > maxEnd) maxEnd = end;
     }
     return maxEnd || 16;
