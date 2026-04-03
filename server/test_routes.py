@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 from httpx import AsyncClient, ASGITransport
-from main import app
+from server.main import app
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ async def test_index_served(client):
 @pytest.fixture
 def projects_dir(tmp_path):
     """Create a temp directory for projects and patch the app."""
-    import routes
+    from server import routes
     original = routes.PROJECTS_DIR
     routes.PROJECTS_DIR = tmp_path
     yield tmp_path
@@ -107,7 +107,7 @@ async def test_get_sample_not_found(client, projects_dir):
 
 @pytest.fixture
 def kit_dir(tmp_path):
-    import routes
+    from server import routes
     original = routes.KIT_DIR
     kit = tmp_path / "kit"
     kit.mkdir()
