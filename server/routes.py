@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api")
@@ -61,3 +62,22 @@ def update_project(name: str, body: dict):
         raise HTTPException(404, "Project not found")
     project_file.write_text(json.dumps(body, indent=2))
     return {"status": "saved"}
+
+
+@router.post("/projects/{name}/samples", status_code=201)
+async def upload_sample(name: str, file: UploadFile = File(...)):
+    samples_dir = PROJECTS_DIR / name / "samples"
+    if not samples_dir.exists():
+        raise HTTPException(404, "Project not found")
+    dest = samples_dir / file.filename
+    content = await file.read()
+    dest.write_bytes(content)
+    return {"filename": file.filename}
+
+
+@router.get("/projects/{name}/samples/{filename}")
+def get_sample(name: str, filename: str):
+    sample_path = PROJECTS_DIR / name / "samples" / filename
+    if not sample_path.exists():
+        raise HTTPException(404, "Sample not found")
+    return FileResponse(sample_path, media_type="audio/wav")

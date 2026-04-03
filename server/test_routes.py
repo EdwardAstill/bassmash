@@ -79,3 +79,27 @@ async def test_update_project(client, projects_dir):
 async def test_get_nonexistent_project(client, projects_dir):
     resp = await client.get("/api/projects/nope")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upload_sample(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    files = {"file": ("kick.wav", b"RIFF fake wav data", "audio/wav")}
+    resp = await client.post("/api/projects/my-beat/samples", files=files)
+    assert resp.status_code == 201
+    assert (projects_dir / "my-beat" / "samples" / "kick.wav").exists()
+
+@pytest.mark.asyncio
+async def test_get_sample(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    sample_path = projects_dir / "my-beat" / "samples" / "kick.wav"
+    sample_path.write_bytes(b"RIFF fake wav data")
+    resp = await client.get("/api/projects/my-beat/samples/kick.wav")
+    assert resp.status_code == 200
+    assert resp.content == b"RIFF fake wav data"
+
+@pytest.mark.asyncio
+async def test_get_sample_not_found(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    resp = await client.get("/api/projects/my-beat/samples/nope.wav")
+    assert resp.status_code == 404
