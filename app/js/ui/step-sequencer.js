@@ -4,7 +4,13 @@ import { setupCanvas } from './utils.js';
 const CELL_SIZE = 28, HEADER_WIDTH = 80, HEADER_HEIGHT = 24;
 
 export function initStepSequencer(container) {
-  container.innerHTML = `<canvas id="step-seq-canvas"></canvas>`;
+  container.innerHTML = `
+    <div class="editor-tabs">
+      <button class="tab" data-tab="piano-roll">Piano Roll</button>
+      <button class="tab active" data-tab="step-seq">Step Sequencer</button>
+    </div>
+    <div class="editor-content"><canvas id="step-seq-canvas"></canvas></div>
+  `;
   const canvas = document.getElementById('step-seq-canvas');
   canvas.style.width = '100%'; canvas.style.height = '100%';
 
@@ -14,10 +20,13 @@ export function initStepSequencer(container) {
   }
   function render() {
     const { ctx, width, height } = setupCanvas(canvas);
+    if (width === 0 || height === 0) return;
     const pattern = getPattern();
     ctx.fillStyle = '#0f3460'; ctx.fillRect(0, 0, width, height);
     if (!pattern || !pattern.steps) {
-      ctx.fillStyle = '#7ec8e3'; ctx.font = '13px sans-serif'; ctx.fillText('No pattern selected', 20, 40); return;
+      ctx.fillStyle = '#7ec8e3'; ctx.font = '13px sans-serif';
+      ctx.fillText('No pattern selected — click "+ Drums" to add a track', 20, 40);
+      return;
     }
     const numSteps = pattern.stepCount || 16;
     const rows = pattern.steps;
@@ -61,6 +70,18 @@ export function initStepSequencer(container) {
     store.emit('change', { path: 'patterns', value: store.data.patterns });
     store._scheduleSave(); render();
   });
+
+  // Tab switching
+  container.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      store.emit('editorTabChange', tab.dataset.tab);
+    });
+  });
+
   store.on('change', render); store.on('patternSelected', render); store.on('loaded', render); store.on('beat', render);
-  render(); window.addEventListener('resize', render);
+  // Use requestAnimationFrame to ensure layout is computed before first render
+  requestAnimationFrame(render);
+  window.addEventListener('resize', render);
 }

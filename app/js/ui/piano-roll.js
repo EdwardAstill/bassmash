@@ -81,5 +81,5 @@ export function initPianoRoll(container) {
     });
   });
   store.on('change', render); store.on('patternSelected', render); store.on('loaded', render);
-  render(); window.addEventListener('resize', render);
+  requestAnimationFrame(render); window.addEventListener('resize', render);
 }

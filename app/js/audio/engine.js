@@ -10,6 +10,7 @@ class AudioEngine {
     this._currentBeat = 0;
     this._lookahead = 0.1;
     this._scheduleInterval = 25;
+    this.looping = true; // loop by default
   }
   init() {
     this.ctx = new AudioContext();
@@ -23,6 +24,19 @@ class AudioEngine {
   get sampleRate() { return this.ctx.sampleRate; }
   get currentTime() { return this.ctx.currentTime; }
   _secondsPerBeat() { return 60 / store.data.bpm; }
+
+  /** Get the loop length in 16th notes based on arrangement, or default 16 (1 bar) */
+  _getLoopLength() {
+    const arrangement = store.data.arrangement;
+    if (arrangement.length === 0) return 16; // 1 bar default
+    let maxEnd = 0;
+    for (const clip of arrangement) {
+      const end = (clip.startBeat + clip.lengthBeats) * 4; // beats to 16th notes
+      if (end > maxEnd) maxEnd = end;
+    }
+    return maxEnd || 16;
+  }
+
   play() {
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this._currentBeat = store.currentBeat;
@@ -46,10 +60,16 @@ class AudioEngine {
     if (this._schedulerTimer) { clearInterval(this._schedulerTimer); this._schedulerTimer = null; }
   }
   _schedule() {
+    const loopLen = this._getLoopLength();
     while (this._nextBeatTime < this.ctx.currentTime + this._lookahead) {
-      store.currentBeat = this._currentBeat;
-      store.emit('beat', { beat: this._currentBeat, time: this._nextBeatTime });
+      // Wrap beat for looping
+      const beat = this.looping ? (this._currentBeat % loopLen) : this._currentBeat;
+      store.currentBeat = beat;
+      store.emit('beat', { beat, time: this._nextBeatTime });
       this._currentBeat++;
+      if (this.looping && this._currentBeat >= loopLen) {
+        this._currentBeat = 0;
+      }
       this._nextBeatTime += this._secondsPerBeat() / 4;
     }
   }
