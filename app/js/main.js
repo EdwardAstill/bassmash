@@ -15,6 +15,7 @@ import { loadWaveform, getCached } from './audio/waveform.js';
 const synth = new Synth();
 
 async function init() {
+  const _activeAudioSources = [];
   engine.init();
   store.setSaveFn(async (data) => {
     if (store.projectName) await api.saveProject(store.projectName, data);
@@ -24,6 +25,14 @@ async function init() {
   initMixerPanel();
   initChannelRack(document.getElementById('channel-rack'));
   initBrowser(document.getElementById('browser'));
+  store.on('transport', (evt) => {
+    if (evt === 'stop') {
+      for (const src of _activeAudioSources) {
+        try { src.stop(); } catch (_) {}
+      }
+      _activeAudioSources.length = 0;
+    }
+  });
   store.on('uploadAndCreateAudioTrack', async (file) => {
     const result = await api.uploadAudio(store.projectName, file);
     store.audioFiles = await api.listAudio(store.projectName);
@@ -31,6 +40,30 @@ async function init() {
     store.emit('createAudioTrackFromRef', { audioRef: result.filename, startBeat: 0 });
   });
   store.on('beat', ({ beat, time }) => {
+    // Audio clip playback
+    for (const clip of store.data.arrangement) {
+      if (clip.type !== 'audio') continue;
+      const track = store.data.tracks[clip.trackIndex];
+      if (!track || track.muted) continue;
+      const clipStartStep = clip.startBeat * 4;
+      if (beat !== clipStartStep) continue;
+      const ch = mixer.channels[clip.trackIndex];
+      if (!ch) continue;
+      const url = api.audioUrl(store.projectName, clip.audioRef);
+      const cached = getCached(url);
+      if (!cached || !cached.audioBuf) continue;
+      const source = engine.ctx.createBufferSource();
+      source.buffer = cached.audioBuf;
+      source.connect(ch.input);
+      source.start(time, clip.offset || 0);
+      const secondsPerBeat = 60 / (store.data.bpm * 4);
+      source.stop(time + clip.lengthBeats * secondsPerBeat);
+      _activeAudioSources.push(source);
+      source.onended = () => {
+        const idx = _activeAudioSources.indexOf(source);
+        if (idx !== -1) _activeAudioSources.splice(idx, 1);
+      };
+    }
     for (let t = 0; t < store.data.tracks.length; t++) {
       const track = store.data.tracks[t];
       if (track.muted) continue;
