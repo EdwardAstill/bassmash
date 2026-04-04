@@ -6,7 +6,6 @@ export function initMixerPanel() {
   const el = document.getElementById('mixer');
 
   function render() {
-    const channels = mixer.channels;
     const tracks = store.data.tracks;
     el.innerHTML = `
       <div class="panel-header">Mixer</div>
@@ -52,40 +51,50 @@ export function initMixerPanel() {
         const idx = parseInt(btn.dataset.idx);
         if (idx < 0) return;
         store.data.tracks[idx].soloed = !store.data.tracks[idx].soloed;
+        const ch = mixer.channels[idx];
+        if (ch) ch.soloed = store.data.tracks[idx].soloed;
         mixer.updateSoloState();
         store.emit('change', { path: 'tracks' });
         store._scheduleSave();
         render();
       });
     });
-
-    el.querySelectorAll('.strip-fader-handle').forEach(handle => {
-      let dragging = false, startY = 0, startBottom = 0;
-      handle.addEventListener('mousedown', (e) => {
-        dragging = true;
-        startY = e.clientY;
-        startBottom = parseInt(handle.style.bottom);
-        e.preventDefault();
-      });
-      window.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        const dy = startY - e.clientY;
-        const newBottom = Math.max(0, Math.min(65, startBottom + dy));
-        handle.style.bottom = newBottom + 'px';
-        const idx = parseInt(handle.dataset.idx);
-        const vol = newBottom / 65;
-        if (idx >= 0 && store.data.tracks[idx]) {
-          store.data.tracks[idx].volume = vol;
-          const ch = mixer.channels[idx];
-          if (ch) ch.setVolume(vol);
-          store._scheduleSave();
-        } else {
-          engine.masterGain.gain.setValueAtTime(vol, engine.ctx.currentTime);
-        }
-      });
-      window.addEventListener('mouseup', () => { dragging = false; });
-    });
   }
+
+  // Fader drag state — registered once, not inside render()
+  let faderDragging = null;
+
+  window.addEventListener('mousemove', (e) => {
+    if (!faderDragging) return;
+    const dy = faderDragging.startY - e.clientY;
+    const newBottom = Math.max(0, Math.min(65, faderDragging.startBottom + dy));
+    faderDragging.handle.style.bottom = newBottom + 'px';
+    const idx = faderDragging.idx;
+    const vol = newBottom / 65;
+    if (idx >= 0 && store.data.tracks[idx]) {
+      store.data.tracks[idx].volume = vol;
+      const ch = mixer.channels[idx];
+      if (ch) ch.setVolume(vol);
+      store._scheduleSave();
+    } else {
+      engine.masterGain.gain.setValueAtTime(vol, engine.ctx.currentTime);
+    }
+  });
+
+  window.addEventListener('mouseup', () => { faderDragging = null; });
+
+  // Attach fader mousedown after each render via delegation
+  el.addEventListener('mousedown', (e) => {
+    const handle = e.target.closest('.strip-fader-handle');
+    if (!handle) return;
+    faderDragging = {
+      handle,
+      idx: parseInt(handle.dataset.idx),
+      startY: e.clientY,
+      startBottom: parseInt(handle.style.bottom),
+    };
+    e.preventDefault();
+  });
 
   store.on('change', render);
   store.on('loaded', render);
