@@ -6,8 +6,7 @@ import { mixer } from './audio/mixer.js';
 import { Synth } from './audio/synth.js';
 import { initTopbar } from './ui/topbar.js';
 import { initTimeline } from './ui/timeline.js';
-import { initPianoRoll } from './ui/piano-roll.js';
-import { initStepSequencer } from './ui/step-sequencer.js';
+import { initChannelRack } from './ui/step-sequencer.js';
 import { initMixerPanel } from './ui/mixer-panel.js';
 import { midiToFreq } from './ui/utils.js';
 
@@ -21,12 +20,7 @@ async function init() {
   initTopbar();
   initTimeline();
   initMixerPanel();
-  const editorEl = document.getElementById('editor');
-  initPianoRoll(editorEl);
-  store.on('editorTabChange', (tab) => {
-    if (tab === 'piano-roll') initPianoRoll(editorEl);
-    else if (tab === 'step-seq') initStepSequencer(editorEl);
-  });
+  initChannelRack(document.getElementById('channel-rack'));
   store.on('beat', ({ beat, time }) => {
     for (let t = 0; t < store.data.tracks.length; t++) {
       const track = store.data.tracks[t];
