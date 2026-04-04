@@ -5,13 +5,7 @@ const NOTE_HEIGHT = 12, STEP_WIDTH = 20, KEY_WIDTH = 40, MIN_NOTE = 36, MAX_NOTE
 const NOTE_RANGE = MAX_NOTE - MIN_NOTE;
 
 export function initPianoRoll(container) {
-  container.innerHTML = `
-    <div class="editor-tabs">
-      <button class="tab active" data-tab="piano-roll">Piano Roll</button>
-      <button class="tab" data-tab="step-seq">Step Sequencer</button>
-    </div>
-    <div class="editor-content"><canvas id="piano-roll-canvas"></canvas></div>
-  `;
+  container.innerHTML = `<canvas id="piano-roll-canvas"></canvas>`;
   const canvas = document.getElementById('piano-roll-canvas');
   canvas.style.width = '100%'; canvas.style.height = '100%';
   let scrollX = 0, scrollY = (NOTE_RANGE / 2) * NOTE_HEIGHT;
@@ -107,12 +101,6 @@ export function initPianoRoll(container) {
     dragging = false;
     store.emit('change', { path: 'patterns', value: store.data.patterns });
     store._scheduleSave();
-  });
-  container.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active'); store.emit('editorTabChange', tab.dataset.tab);
-    });
   });
   store.on('change', render); store.on('patternSelected', render); store.on('loaded', render);
   requestAnimationFrame(render); window.addEventListener('resize', render);

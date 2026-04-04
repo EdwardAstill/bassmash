@@ -343,9 +343,10 @@ export function initTimeline() {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const hit = clipAt(mx, my);
-    if (hit) {
-      store.selectedPattern = hit.clip.patternIndex;
-      store.emit('patternSelected', hit.clip.patternIndex);
+    if (!hit) return;
+    const pattern = store.data.patterns[hit.clip.patternIndex];
+    if (pattern && pattern.type === 'notes') {
+      store.emit('openPianoRoll', hit.clip.patternIndex);
     }
   });
 

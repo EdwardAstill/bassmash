@@ -9,6 +9,7 @@ import { initTimeline } from './ui/timeline.js';
 import { initChannelRack } from './ui/step-sequencer.js';
 import { initMixerPanel } from './ui/mixer-panel.js';
 import { initBrowser } from './ui/browser.js';
+import { initPianoRoll } from './ui/piano-roll.js';
 import { midiToFreq } from './ui/utils.js';
 import { loadWaveform, getCached } from './audio/waveform.js';
 
@@ -25,6 +26,54 @@ async function init() {
   initMixerPanel();
   initChannelRack(document.getElementById('channel-rack'));
   initBrowser(document.getElementById('browser'));
+
+  const overlay = document.getElementById('piano-roll-overlay');
+  overlay.innerHTML = `
+    <div class="piano-roll-window">
+      <div class="piano-roll-titlebar">
+        <span id="piano-roll-title">Piano Roll</span>
+        <button class="piano-roll-close">&#x2715;</button>
+      </div>
+      <div class="piano-roll-content"></div>
+    </div>
+  `;
+  const prContent = overlay.querySelector('.piano-roll-content');
+  const prTitle = overlay.querySelector('#piano-roll-title');
+
+  function openPianoRoll(patternIdx) {
+    store.selectedPattern = patternIdx;
+    const pattern = store.data.patterns[patternIdx];
+    prTitle.textContent = pattern ? `Piano Roll \u2014 ${pattern.name}` : 'Piano Roll';
+    overlay.classList.remove('hidden');
+    initPianoRoll(prContent);
+  }
+
+  function closePianoRoll() {
+    overlay.classList.add('hidden');
+  }
+
+  overlay.querySelector('.piano-roll-close').addEventListener('click', closePianoRoll);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePianoRoll(); });
+
+  const prTitlebar = overlay.querySelector('.piano-roll-titlebar');
+  let prDragState = null;
+  prTitlebar.addEventListener('mousedown', (e) => {
+    const win = overlay.querySelector('.piano-roll-window');
+    const rect = win.getBoundingClientRect();
+    prDragState = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top };
+    win.style.position = 'fixed';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!prDragState) return;
+    const win = overlay.querySelector('.piano-roll-window');
+    win.style.left = (prDragState.origLeft + e.clientX - prDragState.startX) + 'px';
+    win.style.top  = (prDragState.origTop  + e.clientY - prDragState.startY) + 'px';
+  });
+  window.addEventListener('mouseup', () => { prDragState = null; });
+
+  store.on('openPianoRoll', openPianoRoll);
+
   store.on('transport', (evt) => {
     if (evt === 'stop') {
       for (const src of _activeAudioSources) {
