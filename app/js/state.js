@@ -11,6 +11,7 @@ class StateStore {
       patterns: [],
       arrangement: [],
     };
+    this.audioFiles = [];
     this.playing = false;
     this.currentBeat = 0;
     this.selectedTrack = null;

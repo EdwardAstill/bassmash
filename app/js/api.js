@@ -53,4 +53,20 @@ export const api = {
     });
     return res.json();
   },
+  async uploadAudio(projectName, file) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/projects/${encodeURIComponent(projectName)}/audio`, {
+      method: 'POST',
+      body: form,
+    });
+    return res.json(); // { filename }
+  },
+  async listAudio(projectName) {
+    const res = await fetch(`${BASE}/projects/${encodeURIComponent(projectName)}/audio`);
+    return res.json(); // string[]
+  },
+  audioUrl(projectName, filename) {
+    return `${BASE}/projects/${encodeURIComponent(projectName)}/audio/${encodeURIComponent(filename)}`;
+  },
 };
