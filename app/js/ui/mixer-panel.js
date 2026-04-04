@@ -1,75 +1,93 @@
-import { store } from '../state.js';
 import { mixer } from '../audio/mixer.js';
 import { engine } from '../audio/engine.js';
+import { store } from '../state.js';
 
 export function initMixerPanel() {
-  const container = document.getElementById('mixer');
+  const el = document.getElementById('mixer');
+
   function render() {
+    const channels = mixer.channels;
     const tracks = store.data.tracks;
-    container.innerHTML = `
-      <div class="mixer-channels">
-        ${tracks.map((track, i) => `
-          <div class="mixer-channel" data-index="${i}">
-            <div class="channel-name">${track.name || `Track ${i + 1}`}</div>
-            <div class="channel-controls">
-              <button class="mute-btn ${track.muted ? 'active' : ''}" data-action="mute" data-index="${i}">M</button>
-              <button class="solo-btn ${track.soloed ? 'active' : ''}" data-action="solo" data-index="${i}">S</button>
+    el.innerHTML = `
+      <div class="panel-header">Mixer</div>
+      <div class="mixer-strips">
+        ${['Master', ...tracks.map(t => t.name || 'Track')].map((name, i) => {
+          const isMaster = i === 0;
+          const track = !isMaster ? tracks[i - 1] : null;
+          const muted = track ? track.muted : false;
+          const soloed = track ? track.soloed : false;
+          return `
+          <div class="mixer-strip" data-idx="${i - 1}">
+            <div class="strip-ms">
+              <button class="strip-btn mute-btn ${muted ? 'active' : ''}" data-idx="${i - 1}" title="Mute">M</button>
+              <button class="strip-btn solo-btn ${soloed ? 'active' : ''}" data-idx="${i - 1}" title="Solo">S</button>
             </div>
-            <div class="fader-container">
-              <input type="range" class="fader" orient="vertical" min="0" max="100"
-                value="${Math.round((track.volume ?? 1) * 100)}" data-action="volume" data-index="${i}">
+            <div class="strip-fader-track">
+              <div class="strip-fader-handle" style="bottom: ${(isMaster ? 1 : (track ? track.volume : 1)) * 65}px;"
+                data-idx="${i - 1}"></div>
             </div>
-            <div class="pan-container">
-              <label>Pan</label>
-              <input type="range" class="pan" min="-100" max="100"
-                value="${Math.round((track.pan ?? 0) * 100)}" data-action="pan" data-index="${i}">
-            </div>
-            <div class="fx-toggles">
-              <button class="fx-btn ${track.effects?.eq ? 'active' : ''}" data-action="fx" data-fx="eq" data-index="${i}">EQ</button>
-              <button class="fx-btn ${track.effects?.distortion ? 'active' : ''}" data-action="fx" data-fx="dist" data-index="${i}">Dist</button>
-              <button class="fx-btn ${track.effects?.delay ? 'active' : ''}" data-action="fx" data-fx="delay" data-index="${i}">Dly</button>
-              <button class="fx-btn ${track.effects?.reverb ? 'active' : ''}" data-action="fx" data-fx="reverb" data-index="${i}">Rev</button>
-            </div>
-          </div>
-        `).join('')}
-        <div class="mixer-channel master">
-          <div class="channel-name">Master</div>
-          <div class="fader-container">
-            <input type="range" class="fader" orient="vertical" min="0" max="100" value="100" data-action="master-volume">
-          </div>
-          <canvas id="meter-canvas" width="30" height="120"></canvas>
-        </div>
+            <div class="strip-db">0db</div>
+            <div class="strip-name ${isMaster ? 'master' : ''}">${name}</div>
+          </div>`;
+        }).join('')}
       </div>
     `;
-    container.addEventListener('input', (e) => {
-      const idx = parseInt(e.target.dataset.index, 10);
-      const action = e.target.dataset.action;
-      if (action === 'volume') { const vol = parseInt(e.target.value, 10) / 100; store.data.tracks[idx].volume = vol; if (mixer.channels[idx]) mixer.channels[idx].setVolume(vol); store._scheduleSave(); }
-      else if (action === 'pan') { const pan = parseInt(e.target.value, 10) / 100; store.data.tracks[idx].pan = pan; if (mixer.channels[idx]) mixer.channels[idx].setPan(pan); store._scheduleSave(); }
-      else if (action === 'master-volume') { mixer.setMasterVolume(parseInt(e.target.value, 10) / 100); }
+
+    el.querySelectorAll('.mute-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        if (idx < 0) return;
+        store.data.tracks[idx].muted = !store.data.tracks[idx].muted;
+        const ch = mixer.channels[idx];
+        if (ch) ch.setMute(store.data.tracks[idx].muted);
+        mixer.updateSoloState();
+        store.emit('change', { path: 'tracks' });
+        store._scheduleSave();
+        render();
+      });
     });
-    container.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-action]'); if (!btn) return;
-      const idx = parseInt(btn.dataset.index, 10);
-      if (btn.dataset.action === 'mute') { store.data.tracks[idx].muted = !store.data.tracks[idx].muted; if (mixer.channels[idx]) mixer.channels[idx].setMute(store.data.tracks[idx].muted); mixer.updateSoloState(); store._scheduleSave(); render(); }
-      else if (btn.dataset.action === 'solo') { store.data.tracks[idx].soloed = !store.data.tracks[idx].soloed; mixer.updateSoloState(); store._scheduleSave(); render(); }
+
+    el.querySelectorAll('.solo-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        if (idx < 0) return;
+        store.data.tracks[idx].soloed = !store.data.tracks[idx].soloed;
+        mixer.updateSoloState();
+        store.emit('change', { path: 'tracks' });
+        store._scheduleSave();
+        render();
+      });
     });
-    const meterCanvas = document.getElementById('meter-canvas');
-    if (meterCanvas) {
-      const mCtx = meterCanvas.getContext('2d');
-      function drawMeter() {
-        const data = mixer.getMeterData(); let sum = 0;
-        for (let i = 0; i < data.length; i++) { const val = (data[i] - 128) / 128; sum += val * val; }
-        const rms = Math.sqrt(sum / data.length); const level = Math.min(1, rms * 3);
-        mCtx.fillStyle = '#0a0e1a'; mCtx.fillRect(0, 0, 30, 120);
-        const h = level * 120;
-        const gradient = mCtx.createLinearGradient(0, 120 - h, 0, 120);
-        gradient.addColorStop(0, level > 0.8 ? '#f0425d' : '#34d399'); gradient.addColorStop(1, '#6366f1');
-        mCtx.fillStyle = gradient; mCtx.fillRect(4, 120 - h, 22, h);
-        requestAnimationFrame(drawMeter);
-      }
-      drawMeter();
-    }
+
+    el.querySelectorAll('.strip-fader-handle').forEach(handle => {
+      let dragging = false, startY = 0, startBottom = 0;
+      handle.addEventListener('mousedown', (e) => {
+        dragging = true;
+        startY = e.clientY;
+        startBottom = parseInt(handle.style.bottom);
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dy = startY - e.clientY;
+        const newBottom = Math.max(0, Math.min(65, startBottom + dy));
+        handle.style.bottom = newBottom + 'px';
+        const idx = parseInt(handle.dataset.idx);
+        const vol = newBottom / 65;
+        if (idx >= 0 && store.data.tracks[idx]) {
+          store.data.tracks[idx].volume = vol;
+          const ch = mixer.channels[idx];
+          if (ch) ch.setVolume(vol);
+          store._scheduleSave();
+        } else {
+          engine.masterGain.gain.setValueAtTime(vol, engine.ctx.currentTime);
+        }
+      });
+      window.addEventListener('mouseup', () => { dragging = false; });
+    });
   }
-  store.on('change', render); store.on('loaded', render); render();
+
+  store.on('change', render);
+  store.on('loaded', render);
+  render();
 }
