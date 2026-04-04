@@ -10,6 +10,7 @@ import { initChannelRack } from './ui/step-sequencer.js';
 import { initMixerPanel } from './ui/mixer-panel.js';
 import { initBrowser } from './ui/browser.js';
 import { midiToFreq } from './ui/utils.js';
+import { loadWaveform, getCached } from './audio/waveform.js';
 
 const synth = new Synth();
 
@@ -127,6 +128,13 @@ async function loadProject(name) {
   store.load(name, data);
   for (const track of data.tracks) mixer.createChannel(track.name);
   await sampler.preloadProject();
+  store.audioFiles = await api.listAudio(name);
+  for (const clip of data.arrangement) {
+    if (clip.type === 'audio' && clip.audioRef) {
+      const url = api.audioUrl(name, clip.audioRef);
+      loadWaveform(url, engine.ctx).then(() => store.emit('change', {}));
+    }
+  }
   if (data.patterns && data.patterns.length > 0) {
     store.selectedPattern = 0;
     store.emit('patternSelected', 0);

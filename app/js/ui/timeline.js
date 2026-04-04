@@ -1,5 +1,8 @@
 import { store } from '../state.js';
 import { setupCanvas, drawGrid } from './utils.js';
+import { getCached } from '../audio/waveform.js';
+import { api } from '../api.js';
+import { engine } from '../audio/engine.js';
 
 const TRACK_HEIGHT = 44;
 const BEAT_WIDTH = 32;
@@ -95,17 +98,12 @@ export function initTimeline() {
       if (x + w < HEADER_WIDTH || x > width) continue;
       const clippedX = Math.max(x, HEADER_WIDTH);
       const clippedW = Math.min(x + w, width) - clippedX;
-      const isSelected = clip.patternIndex === store.selectedPattern;
-      // Clip body
-      ctx.fillStyle = isSelected ? C_CLIP_ACTIVE : C_CLIP;
-      ctx.fillRect(clippedX, y + 2, clippedW - 1, TRACK_HEIGHT - 4);
-      ctx.globalAlpha = 1;
-      // Clip name
-      ctx.fillStyle = C_TEXT; ctx.font = '600 10px "DM Sans", system-ui, sans-serif';
-      ctx.fillText(clip.patternName || `P${clip.patternIndex}`, clippedX + 8, y + 16);
-      // Subtle border
-      ctx.strokeStyle = C_CLIP_BORDER; ctx.lineWidth = 1;
-      ctx.strokeRect(clippedX, y + 2, clippedW - 1, TRACK_HEIGHT - 4);
+
+      if (clip.type === 'audio') {
+        _renderAudioClip(ctx, clip, clippedX, clippedW, y);
+      } else {
+        _renderPatternClip(ctx, clip, clippedX, clippedW, y);
+      }
     }
     // Loop region indicator
     const loopLen = _getLoopLen();
@@ -139,6 +137,52 @@ export function initTimeline() {
     // Header divider
     ctx.strokeStyle = C_BORDER; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(HEADER_WIDTH, 0); ctx.lineTo(HEADER_WIDTH, height); ctx.stroke();
+  }
+
+  function _renderPatternClip(ctx, clip, cx, cw, y) {
+    const isSelected = clip.trackIndex === store.selectedTrack;
+    ctx.fillStyle = C_CLIP;
+    ctx.fillRect(cx, y + 3, cw - 1, TRACK_HEIGHT - 6);
+    ctx.fillStyle = isSelected ? '#fff' : '#333';
+    ctx.fillRect(cx, y + 3, 2, TRACK_HEIGHT - 6);
+    ctx.fillStyle = isSelected ? '#fff' : C_TEXT;
+    ctx.font = '500 9px "DM Sans", system-ui, sans-serif';
+    ctx.fillText(clip.patternName || `P${clip.patternIndex}`, cx + 8, y + 16);
+    ctx.strokeStyle = isSelected ? '#444' : C_CLIP_BORDER;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx, y + 3, cw - 1, TRACK_HEIGHT - 6);
+  }
+
+  function _renderAudioClip(ctx, clip, cx, cw, y) {
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(cx, y + 3, cw - 1, TRACK_HEIGHT - 6);
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(cx, y + 3, 2, TRACK_HEIGHT - 6);
+    const url = api.audioUrl(store.projectName, clip.audioRef);
+    const cached = getCached(url);
+    if (cached && cached.points) {
+      const { points } = cached;
+      const midY = y + TRACK_HEIGHT / 2;
+      const ampH = (TRACK_HEIGHT - 12) / 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (let i = 0; i < points.length; i++) {
+        const px = cx + (i / points.length) * cw;
+        if (px > cx + cw) break;
+        const py = midY - points[i] * ampH;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#777';
+    ctx.font = '500 8px "DM Sans", system-ui, sans-serif';
+    ctx.save();
+    ctx.beginPath(); ctx.rect(cx + 4, y + 3, cw - 8, TRACK_HEIGHT - 6); ctx.clip();
+    ctx.fillText(clip.audioRef, cx + 5, y + 13);
+    ctx.restore();
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
+    ctx.strokeRect(cx, y + 3, cw - 1, TRACK_HEIGHT - 6);
   }
 
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); scrollX = Math.max(0, scrollX + e.deltaX); scrollY = Math.max(0, scrollY + e.deltaY); render(); });
