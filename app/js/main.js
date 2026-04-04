@@ -23,6 +23,12 @@ async function init() {
   initMixerPanel();
   initChannelRack(document.getElementById('channel-rack'));
   initBrowser(document.getElementById('browser'));
+  store.on('uploadAndCreateAudioTrack', async (file) => {
+    const result = await api.uploadAudio(store.projectName, file);
+    store.audioFiles = await api.listAudio(store.projectName);
+    store.emit('audioFilesChanged');
+    store.emit('createAudioTrackFromRef', { audioRef: result.filename, startBeat: 0 });
+  });
   store.on('beat', ({ beat, time }) => {
     for (let t = 0; t < store.data.tracks.length; t++) {
       const track = store.data.tracks[t];
