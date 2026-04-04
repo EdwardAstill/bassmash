@@ -2,7 +2,6 @@ import { store } from '../state.js';
 import { engine } from '../audio/engine.js';
 import { mixer } from '../audio/mixer.js';
 import { sampler } from '../audio/sampler.js';
-import { api } from '../api.js';
 import { exportMp3 } from '../audio/export.js';
 
 export function initTopbar() {
@@ -45,6 +44,7 @@ export function initTopbar() {
     input.accept = 'audio/*';
     input.multiple = true;
     input.addEventListener('change', async () => {
+      if (!input.files || !input.files.length) return;
       for (const file of input.files) {
         store.emit('uploadAndCreateAudioTrack', file);
       }
