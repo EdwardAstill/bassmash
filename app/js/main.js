@@ -8,6 +8,7 @@ import { initTopbar } from './ui/topbar.js';
 import { initTimeline } from './ui/timeline.js';
 import { initChannelRack } from './ui/step-sequencer.js';
 import { initMixerPanel } from './ui/mixer-panel.js';
+import { initBrowser } from './ui/browser.js';
 import { midiToFreq } from './ui/utils.js';
 
 const synth = new Synth();
@@ -21,6 +22,7 @@ async function init() {
   initTimeline();
   initMixerPanel();
   initChannelRack(document.getElementById('channel-rack'));
+  initBrowser(document.getElementById('browser'));
   store.on('beat', ({ beat, time }) => {
     for (let t = 0; t < store.data.tracks.length; t++) {
       const track = store.data.tracks[t];
