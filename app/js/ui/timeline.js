@@ -1,8 +1,9 @@
 import { store } from '../state.js';
 import { setupCanvas, drawGrid } from './utils.js';
-import { getCached } from '../audio/waveform.js';
+import { getCached, loadWaveform } from '../audio/waveform.js';
 import { api } from '../api.js';
 import { engine } from '../audio/engine.js';
+import { mixer } from '../audio/mixer.js';
 
 const TRACK_HEIGHT = 44;
 const BEAT_WIDTH = 32;
@@ -184,6 +185,66 @@ export function initTimeline() {
     ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1;
     ctx.strokeRect(cx, y + 3, cw - 1, TRACK_HEIGHT - 6);
   }
+
+  const playlistEl = document.getElementById('playlist');
+
+  playlistEl.addEventListener('dragover', (e) => {
+    const hasBrowserRef = e.dataTransfer.types.includes('text/bassmash-audio-ref');
+    const hasFiles = e.dataTransfer.types.includes('Files');
+    if (hasBrowserRef || hasFiles) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  });
+
+  playlistEl.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const dropBeat = Math.max(0, Math.floor((mx - HEADER_WIDTH + scrollX) / BEAT_WIDTH));
+
+    const audioRef = e.dataTransfer.getData('text/bassmash-audio-ref');
+    if (audioRef) {
+      await _createAudioTrack(audioRef, dropBeat);
+      return;
+    }
+
+    const files = Array.from(e.dataTransfer.files)
+      .filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|flac)$/i.test(f.name));
+    for (const file of files) {
+      const result = await api.uploadAudio(store.projectName, file);
+      store.audioFiles = await api.listAudio(store.projectName);
+      store.emit('audioFilesChanged');
+      await _createAudioTrack(result.filename, dropBeat);
+    }
+  });
+
+  async function _createAudioTrack(audioRef, startBeat) {
+    const trackIdx = store.data.tracks.length;
+    const name = audioRef.replace(/\.(mp3|wav|ogg|flac)$/i, '');
+    store.addTrack({
+      name, type: 'audio',
+      volume: 1, pan: 0, muted: false, soloed: false,
+      effects: { eq: false, distortion: false, delay: false, reverb: false },
+    });
+    mixer.createChannel(name);
+
+    const url = api.audioUrl(store.projectName, audioRef);
+    const { audioBuf } = await loadWaveform(url, engine.ctx);
+    const secondsPerBeat = 60 / (store.data.bpm * 4);
+    const durationBeats = Math.ceil(audioBuf.duration / secondsPerBeat);
+
+    store.data.arrangement.push({
+      type: 'audio', trackIndex: trackIdx,
+      audioRef, startBeat, lengthBeats: durationBeats, offset: 0,
+    });
+    store.emit('change', { path: 'arrangement' });
+    store._scheduleSave();
+  }
+
+  store.on('createAudioTrackFromRef', async ({ audioRef, startBeat }) => {
+    await _createAudioTrack(audioRef, startBeat);
+  });
 
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); scrollX = Math.max(0, scrollX + e.deltaX); scrollY = Math.max(0, scrollY + e.deltaY); render(); });
 
