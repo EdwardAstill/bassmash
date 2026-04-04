@@ -45,6 +45,7 @@ def create_project(body: CreateProject):
         raise HTTPException(400, "Project already exists")
     project_dir.mkdir()
     (project_dir / "samples").mkdir()
+    (project_dir / "audio").mkdir()
     (project_dir / "project.json").write_text(json.dumps(DEFAULT_PROJECT, indent=2))
     return {"name": body.name}
 
@@ -83,6 +84,38 @@ def get_sample(name: str, filename: str):
     if not sample_path.exists():
         raise HTTPException(404, "Sample not found")
     return FileResponse(sample_path, media_type="audio/wav")
+
+
+@router.post("/projects/{name}/audio", status_code=201)
+async def upload_audio(name: str, file: UploadFile = File(...)):
+    audio_dir = PROJECTS_DIR / name / "audio"
+    if not audio_dir.exists():
+        raise HTTPException(404, "Project not found")
+    dest = audio_dir / file.filename
+    content = await file.read()
+    dest.write_bytes(content)
+    return {"filename": file.filename}
+
+
+@router.get("/projects/{name}/audio")
+def list_audio(name: str):
+    audio_dir = PROJECTS_DIR / name / "audio"
+    if not audio_dir.exists():
+        raise HTTPException(404, "Project not found")
+    return [
+        f.name for f in sorted(audio_dir.iterdir())
+        if f.suffix.lower() in (".mp3", ".wav", ".ogg", ".flac")
+    ]
+
+
+@router.get("/projects/{name}/audio/{filename}")
+def get_audio_file(name: str, filename: str):
+    audio_path = PROJECTS_DIR / name / "audio" / filename
+    if not audio_path.exists():
+        raise HTTPException(404, "Audio file not found")
+    suffix = audio_path.suffix.lower()
+    media_type = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".flac": "audio/flac"}.get(suffix, "audio/mpeg")
+    return FileResponse(audio_path, media_type=media_type)
 
 
 @router.get("/kit")

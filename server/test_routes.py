@@ -149,3 +149,47 @@ async def test_export_mp3(client, projects_dir):
         headers={"Content-Type": "audio/wav"},
     )
     assert resp.status_code in (200, 500)
+
+
+@pytest.mark.asyncio
+async def test_create_project_creates_audio_dir(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    assert (projects_dir / "my-beat" / "audio").is_dir()
+
+
+@pytest.mark.asyncio
+async def test_upload_audio(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    files = {"file": ("vocals.mp3", b"fake mp3 data", "audio/mpeg")}
+    resp = await client.post("/api/projects/my-beat/audio", files=files)
+    assert resp.status_code == 201
+    assert resp.json()["filename"] == "vocals.mp3"
+    assert (projects_dir / "my-beat" / "audio" / "vocals.mp3").exists()
+
+
+@pytest.mark.asyncio
+async def test_list_audio(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    (projects_dir / "my-beat" / "audio" / "vocals.mp3").write_bytes(b"fake")
+    (projects_dir / "my-beat" / "audio" / "beat.wav").write_bytes(b"fake")
+    resp = await client.get("/api/projects/my-beat/audio")
+    assert resp.status_code == 200
+    names = resp.json()
+    assert "vocals.mp3" in names
+    assert "beat.wav" in names
+
+
+@pytest.mark.asyncio
+async def test_get_audio_file(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    (projects_dir / "my-beat" / "audio" / "vocals.mp3").write_bytes(b"fake mp3")
+    resp = await client.get("/api/projects/my-beat/audio/vocals.mp3")
+    assert resp.status_code == 200
+    assert resp.content == b"fake mp3"
+
+
+@pytest.mark.asyncio
+async def test_get_audio_file_not_found(client, projects_dir):
+    await client.post("/api/projects", json={"name": "my-beat"})
+    resp = await client.get("/api/projects/my-beat/audio/nope.mp3")
+    assert resp.status_code == 404
