@@ -16,9 +16,16 @@ import { api } from '../api.js';
 import { audioCache } from './audio-cache.js';
 import { bpmAtBeat } from './tempo.js';
 import { clampAutomationValue } from './automation-util.js';
+import { Synth } from './synth.js';
+
+const midiToHz = (p) => 440 * Math.pow(2, (p - 69) / 12);
 
 export function initScheduler({ store, sampler, mixer, engine }) {
+  const synth = new Synth();
   const _activeAudioSources = [];
+  // Synth voice handles — tracked so loopWrap + transport stop can kill
+  // oscillators that would otherwise ring past the wrap / stop boundary.
+  const _activeVoices = new Set();
   // Clips we've already warned about missing-buffer for, so we don't spam
   // the console on every 16th-note tick while a decode is in flight.
   const _warnedAudioRefs = new Set();
@@ -130,6 +137,9 @@ export function initScheduler({ store, sampler, mixer, engine }) {
 
   // In case a fresh project gets loaded after the engine is up.
   store.on('loaded', () => {
+    // Reset the "missing buffer" warn-once set so a renamed / re-uploaded
+    // audio file gets a fresh chance to log on next trigger.
+    _warnedAudioRefs.clear();
     sampler.preloadProject().catch((err) =>
       console.warn('[scheduler] preloadProject failed', err)
     );
@@ -219,7 +229,15 @@ export function initScheduler({ store, sampler, mixer, engine }) {
           src.buffer = buffer;
           try { src.connect(channel.input); } catch (_) { continue; }
           const offset = Math.max(0, clip.offset || 0);
-          const stopAt = time + (clip.lengthBeats || 0) * secondsPerBeat;
+          // Sum 16th-note durations across the clip span so mid-clip tempo
+          // changes shorten/lengthen the scheduled stop correctly. Matches
+          // offline-render's cumulative step-time approach.
+          let clipSeconds = 0;
+          const clipLenSteps = Math.round((clip.lengthBeats || 0) * 4);
+          for (let s = 0; s < clipLenSteps; s++) {
+            clipSeconds += (60 / bpmAtBeat(store.data, beat + s)) / 4;
+          }
+          const stopAt = time + clipSeconds;
           try {
             src.start(time, offset);
             if (clip.lengthBeats > 0) src.stop(stopAt);
@@ -291,18 +309,51 @@ export function initScheduler({ store, sampler, mixer, engine }) {
             }
           }
         }
-        // Synth / note patterns are deferred to a later phase.
+        // Synth / note patterns — fire each note whose `start` step lands
+        // on the current localStep. Duration/velocity come off the note;
+        // timbre comes off track.synthParams.
+        if (Array.isArray(pattern.notes)) {
+          const params = track?.synthParams || {};
+          for (const note of pattern.notes) {
+            if (typeof note?.start !== 'number') continue;
+            if (note.start !== localStep) continue;
+            const dur = Math.max(1, note.duration || 1) * secondsPerStep;
+            const freq = midiToHz(note.pitch || 60);
+            const vel = (note.velocity != null ? note.velocity : 100) / 127;
+            const velGain = engine.ctx.createGain();
+            velGain.gain.value = vel;
+            try { velGain.connect(channel.input); } catch (_) { continue; }
+            try {
+              const voice = synth.playNote(freq, time, dur, params, velGain);
+              if (voice) {
+                _activeVoices.add(voice);
+                voice.onended(() => {
+                  _activeVoices.delete(voice);
+                  try { velGain.disconnect(); } catch (_) {}
+                });
+              }
+            } catch (err) {
+              console.warn('[scheduler] synth note failed', err);
+              try { velGain.disconnect(); } catch (_) {}
+            }
+          }
+        }
       }
     }
   });
 
-  // Loop wrap — hard-stop any in-flight audio sources so clips with
-  // no lengthBeats (play-to-natural-end) don't bleed past the loop point.
+  // Loop wrap — hard-stop any in-flight audio sources + synth voices so
+  // clips with no lengthBeats (play-to-natural-end) and long-duration
+  // synth notes don't bleed past the loop point.
   store.on('loopWrap', () => {
     for (const src of _activeAudioSources) {
       try { src.stop(); } catch (_) { /* already stopped */ }
     }
     _activeAudioSources.length = 0;
+    for (const voice of _activeVoices) {
+      try { voice.stop(); } catch (_) {}
+    }
+    _activeVoices.clear();
   });
 
   // Hard-stop everything on transport stop.
@@ -312,6 +363,10 @@ export function initScheduler({ store, sampler, mixer, engine }) {
       try { src.stop(); } catch (_) { /* already stopped */ }
     }
     _activeAudioSources.length = 0;
+    for (const voice of _activeVoices) {
+      try { voice.stop(); } catch (_) {}
+    }
+    _activeVoices.clear();
 
     // Restore every automated param to its pre-automation value so the
     // mixer / send / fx UIs don't look stuck at the last breakpoint.

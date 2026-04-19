@@ -4,9 +4,7 @@
 // Delete/Backspace = remove. Respects store.currentTool ('select' | 'split' |
 // 'erase' | 'mute' | …). Renders nothing — arrangement.js owns clip DOM.
 
-// Timeline horizon in beats. MUST match arrangement.js (copied, not imported,
-// to avoid cross-agent coupling).
-const TOTAL_BEATS = 64;
+import { TOTAL_BEATS } from './timeline-constants.js';
 
 // Edge hit-zone width (px) for resize handle detection.
 const EDGE_PX = 8;
@@ -62,13 +60,15 @@ export function initClipInteractions({ store } = {}) {
     return Math.max(1, Math.round(widthPct / 100 * TOTAL_BEATS));
   }
 
+  // Accept rounding noise up to 1 beat — tighter than the previous
+  // Infinity fallback, which could match a clip across the whole lane.
+  const MAX_START_BEAT_DELTA = 1;
+
   function findArrIndex(clipEl) {
     const trackIndex = laneIndexOf(clipEl);
     if (trackIndex < 0) return -1;
     const startBeat = startBeatOfClipEl(clipEl);
     const arr = store.data.arrangement || [];
-    // Prefer exact match on (trackIndex, startBeat); fall back to
-    // nearest startBeat within the same lane in case of rounding.
     let bestIdx = -1;
     let bestDelta = Infinity;
     for (let i = 0; i < arr.length; i++) {
@@ -77,7 +77,7 @@ export function initClipInteractions({ store } = {}) {
       const d = Math.abs(c.startBeat - startBeat);
       if (d < bestDelta) { bestDelta = d; bestIdx = i; }
     }
-    return bestIdx;
+    return bestDelta <= MAX_START_BEAT_DELTA ? bestIdx : -1;
   }
 
   function clearSelection() {

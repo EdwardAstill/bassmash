@@ -2,7 +2,6 @@ import { engine } from './engine.js';
 import { store } from '../state.js';
 
 export class Synth {
-  constructor() { this.voices = []; }
   playNote(frequency, time, duration, params, destination) {
     const ctx = engine.ctx;
     const p = Object.assign({
@@ -13,7 +12,12 @@ export class Synth {
       lfoRate: 4, lfoAmount: 0, lfoTarget: 'pitch',
     }, params);
     const endTime = time + duration;
-    const releaseStart = endTime - p.release;
+    // Clamp ADSR milestones so A + D never overruns the release window —
+    // otherwise setValueAtTime(sustain, releaseStart) would snap gain back
+    // up from an in-progress decay ramp and produce a click.
+    const releaseStart = Math.max(time, endTime - p.release);
+    const decayEnd     = Math.min(time + p.attack + p.decay, releaseStart);
+    const attackEnd    = Math.min(time + p.attack, decayEnd);
     const osc1 = ctx.createOscillator();
     osc1.type = p.waveform;
     osc1.frequency.setValueAtTime(frequency, time);
@@ -23,8 +27,8 @@ export class Synth {
     filter.Q.setValueAtTime(p.filterQ, time);
     const ampEnv = ctx.createGain();
     ampEnv.gain.setValueAtTime(0, time);
-    ampEnv.gain.linearRampToValueAtTime(1, time + p.attack);
-    ampEnv.gain.linearRampToValueAtTime(p.sustain, time + p.attack + p.decay);
+    ampEnv.gain.linearRampToValueAtTime(1, attackEnd);
+    ampEnv.gain.linearRampToValueAtTime(p.sustain, decayEnd);
     ampEnv.gain.setValueAtTime(p.sustain, releaseStart);
     ampEnv.gain.linearRampToValueAtTime(0, endTime);
     osc1.connect(filter);
@@ -35,9 +39,15 @@ export class Synth {
       osc2.frequency.setValueAtTime(frequency, time);
       osc2.detune.setValueAtTime(p.osc2Detune, time);
       osc2.connect(filter);
-      filter.frequency.setValueAtTime(p.filterFreq, time);
-      filter.frequency.linearRampToValueAtTime(p.filterFreq + p.filterEnvAmount, time + p.filterAttack);
-      filter.frequency.linearRampToValueAtTime(p.filterFreq + p.filterEnvAmount * p.filterSustain, time + p.filterAttack + p.filterDecay);
+      // Filter envelope: A → D → S → R, with R honoring p.filterRelease
+      // (previously the R ramp ran over the whole note, flattening the env).
+      const filterReleaseStart = Math.max(time, endTime - p.filterRelease);
+      const filterDecayEnd     = Math.min(time + p.filterAttack + p.filterDecay, filterReleaseStart);
+      const filterAttackEnd    = Math.min(time + p.filterAttack, filterDecayEnd);
+      const sustainHz = p.filterFreq + p.filterEnvAmount * p.filterSustain;
+      filter.frequency.linearRampToValueAtTime(p.filterFreq + p.filterEnvAmount, filterAttackEnd);
+      filter.frequency.linearRampToValueAtTime(sustainHz, filterDecayEnd);
+      filter.frequency.setValueAtTime(sustainHz, filterReleaseStart);
       filter.frequency.linearRampToValueAtTime(p.filterFreq, endTime);
       if (p.lfoAmount > 0) {
         const lfo = ctx.createOscillator();
@@ -55,5 +65,21 @@ export class Synth {
     filter.connect(ampEnv);
     ampEnv.connect(destination);
     osc1.start(time); osc1.stop(endTime);
+
+    // Voice handle — scheduler tracks these so loopWrap / transport stop
+    // can kill in-flight voices rather than letting them ring out.
+    let _stopped = false;
+    return {
+      get ended() { return _stopped; },
+      stop(t) {
+        if (_stopped) return;
+        _stopped = true;
+        const when = Math.max(t ?? ctx.currentTime, ctx.currentTime);
+        try { ampEnv.gain.cancelScheduledValues(when); ampEnv.gain.setValueAtTime(0, when); } catch (_) {}
+        try { osc1.stop(when); } catch (_) {}
+        try { if (osc2) osc2.stop(when); } catch (_) {}
+      },
+      onended(cb) { osc1.addEventListener('ended', cb, { once: true }); },
+    };
   }
 }

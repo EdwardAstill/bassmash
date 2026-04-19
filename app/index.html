@@ -18,6 +18,7 @@
     <header class="zone zone--header" data-zone="1">
       <div class="menu-bar">
         <div class="menu-bar__logo">◆ Bassmash</div>
+        <div class="menu-bar__project" data-field="project-name">no project</div>
         <nav class="menu-bar__menus">
           <button class="menu-bar-button">File</button>
           <button class="menu-bar-button">Edit</button>
@@ -168,24 +169,12 @@
       </div>
     </aside>
 
-    <!-- ZONE 5 — GLOBAL STRIP -->
+    <!-- ZONE 5 — GLOBAL STRIP · ruler labels, markers, and tempo tags are
+         populated by app/js/ui/zones/global-strip.js from project data. -->
     <div class="zone zone--global-strip" data-zone="5">
-      <div class="global-strip__row global-strip__row--ruler">
-        <span>1</span><span>5</span><span>9</span><span>13</span><span>17</span><span>21</span><span>25</span><span>29</span><span>33</span><span>37</span><span>41</span><span>45</span><span>49</span><span>53</span><span>57</span><span>61</span><span>65</span>
-      </div>
-      <div class="global-strip__row global-strip__row--markers">
-        <div class="marker" style="left:2%">Intro</div>
-        <div class="marker marker--verse" style="left:14%">Verse</div>
-        <div class="marker marker--chorus" style="left:34%">Chorus</div>
-        <div class="marker" style="left:52%">Verse 2</div>
-        <div class="marker marker--chorus" style="left:68%">Chorus</div>
-        <div class="marker" style="left:86%">Outro</div>
-      </div>
-      <div class="global-strip__row global-strip__row--tempo">
-        <span class="tempo-tag">♩ 128</span>
-        <span class="tempo-tag" style="left:40%">♩ 128 → 140</span>
-        <span class="tempo-tag" style="left:70%">♩ 140</span>
-      </div>
+      <div class="global-strip__row global-strip__row--ruler"></div>
+      <div class="global-strip__row global-strip__row--markers"></div>
+      <div class="global-strip__row global-strip__row--tempo"></div>
     </div>
 
     <!-- ZONE 6 — ARRANGEMENT -->

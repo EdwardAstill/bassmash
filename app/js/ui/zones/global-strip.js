@@ -11,6 +11,7 @@
 import { bpmAtBeat as sharedBpmAtBeat } from '../../audio/tempo.js';
 import { prompt as modalPrompt } from '../modal.js';
 import { openContextMenu } from '../context-menu.js';
+import { TOTAL_BEATS, TOTAL_STEPS } from './timeline-constants.js';
 
 export function initGlobalStrip({ store, engine }) {
   const root = document.querySelector('.zone--global-strip');
@@ -97,21 +98,36 @@ export function initGlobalStrip({ store, engine }) {
   seekLine.className = 'global-strip__seek';
   ruler.appendChild(seekLine);
 
-  const getLoopLen = () => {
-    try { return engine?._getLoopLength?.() || 16; }
-    catch (_) { return 16; }
-  };
-
+  // Global strip shares the 64-beat canvas with the arrangement. All fractions
+  // are taken against TOTAL_STEPS so markers, tempo tags, and the seek line
+  // align with the clip grid (which uses TOTAL_BEATS). markers[].beat and
+  // tempoChanges[].beat are stored in 16th-note steps.
   function fractionToStep(frac) {
     const clamped = Math.max(0, Math.min(1, frac));
-    return Math.round(clamped * getLoopLen());
+    return Math.round(clamped * TOTAL_STEPS);
+  }
+
+  function stepToPct(step) {
+    return Math.max(0, Math.min(100, (step / TOTAL_STEPS) * 100));
   }
 
   function updateSeekMarker() {
-    const loopLen = getLoopLen() || 1;
-    const pct = Math.max(0, Math.min(100, (store.currentBeat / loopLen) * 100));
-    seekLine.style.left = pct + '%';
+    seekLine.style.left = stepToPct(store.currentBeat || 0) + '%';
   }
+
+  // Ruler labels — render a beat-number every 4 beats across TOTAL_BEATS
+  // so the ruler scale matches the clip grid on the 64-beat canvas. Uses the
+  // CSS row's `display: flex; flex: 1;` layout for even spacing.
+  function renderRulerLabels() {
+    ruler.querySelectorAll('[data-ruler-label]').forEach((el) => el.remove());
+    for (let beat = 0; beat <= TOTAL_BEATS; beat += 4) {
+      const span = document.createElement('span');
+      span.dataset.rulerLabel = 'true';
+      span.textContent = String(beat + 1);
+      ruler.appendChild(span);
+    }
+  }
+  renderRulerLabels();
 
   // Ruler click = seek
   ruler.addEventListener('click', (e) => {
@@ -128,16 +144,6 @@ export function initGlobalStrip({ store, engine }) {
   // ────────────────────────────────────────────────────────────────
   if (markers) {
     if (!Array.isArray(store.data.markers)) store.data.markers = [];
-
-    // Hardcoded markers in index.html don't have a data binding; treat the
-    // stored markers array as the source of truth going forward. Wire every
-    // `.marker` element we find to the unified interaction handler. Elements
-    // created from store.data.markers carry a dataset index; legacy
-    // hardcoded elements do not, and those can only click-jump (no drag /
-    // rename) since there's nothing to persist back into.
-    markers.querySelectorAll('.marker').forEach((el) => wireMarker(el, null));
-
-    // Render stored custom markers (on top of hardcoded ones)
     renderStoredMarkers();
 
     // Right-click empty space = add marker
@@ -167,13 +173,11 @@ export function initGlobalStrip({ store, engine }) {
     if (!markers) return;
     // Remove only the markers we previously rendered (ones with data-store-idx)
     markers.querySelectorAll('.marker[data-store-idx]').forEach((el) => el.remove());
-    const loopLen = getLoopLen() || 1;
     store.data.markers.forEach((m, idx) => {
-      const pct = Math.max(0, Math.min(100, (m.beat / loopLen) * 100));
       const el = document.createElement('div');
       el.className = 'marker';
       el.textContent = m.name;
-      el.style.left = pct + '%';
+      el.style.left = stepToPct(m.beat) + '%';
       el.dataset.storeIdx = String(idx);
       markers.appendChild(el);
       wireMarker(el, idx);
@@ -282,8 +286,7 @@ export function initGlobalStrip({ store, engine }) {
 
         store.emit('change', { path: 'markers', value: store.data.markers });
         // Snap rendered position to the quantized step.
-        const loopLen = getLoopLen() || 1;
-        el.style.left = Math.max(0, Math.min(100, (step / loopLen) * 100)) + '%';
+        el.style.left = stepToPct(step) + '%';
       };
 
       document.addEventListener('pointermove', onMove);
@@ -330,16 +333,12 @@ export function initGlobalStrip({ store, engine }) {
 
   function renderTempoChanges() {
     if (!tempo) return;
-    // Wipe only our added tags — keep the hardcoded ones in index.html so
-    // the placeholder visual stays intact until the project has its own.
     tempo.querySelectorAll('.tempo-tag[data-store-idx]').forEach((el) => el.remove());
-    const loopLen = getLoopLen() || 1;
     (store.data.tempoChanges || []).forEach((t, idx) => {
-      const pct = Math.max(0, Math.min(100, (t.beat / loopLen) * 100));
       const el = document.createElement('span');
       el.className = 'tempo-tag tempo-tag--user';
       el.textContent = `♩ ${t.bpm}`;
-      el.style.left = pct + '%';
+      el.style.left = stepToPct(t.beat) + '%';
       el.dataset.storeIdx = String(idx);
       // Right-click user-added tempo tag → context menu (Change BPM / Delete).
       el.addEventListener('contextmenu', (e) => {
@@ -358,8 +357,8 @@ export function initGlobalStrip({ store, engine }) {
 
   store.on('tick', updateSeekMarker);
   store.on('seek', updateSeekMarker);
-  // Re-render when a new project loads (markers/tempoChanges may change out
-  // from under us, and loopLen depends on the arrangement).
+  // Re-render when a new project loads (markers/tempoChanges may change
+  // out from under us).
   store.on('loaded', () => {
     if (!Array.isArray(store.data.markers)) store.data.markers = [];
     if (!Array.isArray(store.data.tempoChanges)) store.data.tempoChanges = [];

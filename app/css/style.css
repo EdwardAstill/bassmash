@@ -184,6 +184,21 @@ body { min-width: 1280px; min-height: 760px; }
   padding-right: var(--space-2);
   border-right: 1px solid var(--border);
 }
+.menu-bar__project {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface-raised, transparent);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-bar__project:empty::before { content: 'no project'; color: var(--text-muted); }
 .menu-bar__menus { display: flex; gap: var(--space-1); }
 
 .menu-bar-button {

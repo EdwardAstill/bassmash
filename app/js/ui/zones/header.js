@@ -37,6 +37,15 @@ export function initHeader({ ensureAudio }) {
     else playBtn.removeAttribute('data-active');
   });
 
+  // Project name
+  const projectEl = root.querySelector('.menu-bar__project');
+  const paintProject = () => {
+    if (!projectEl) return;
+    projectEl.textContent = store.projectName || 'no project';
+  };
+  paintProject();
+  store.on('loaded', paintProject);
+
   // Sync loop-button active state — on by default.
   const loopBtn = root.querySelector('[data-action="loop"]');
   function paintLoop() {

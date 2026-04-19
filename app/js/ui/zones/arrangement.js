@@ -12,9 +12,8 @@
 import { audioCache } from '../../audio/audio-cache.js';
 import { getPeaks, drawPeaks } from '../../audio/waveform-peaks.js';
 
-// Arrangement horizon: 4 bars · 4/4 = 16 beats? The spec says 64 beats (4 bars * 16).
-// We use 64 so drop-x maps to beats at 1/16 granularity across the visible timeline.
-const TOTAL_BEATS = 64;
+import { TOTAL_BEATS } from './timeline-constants.js';
+
 const DEFAULT_CLIP_LENGTH_BEATS = 4;
 const AUDIO_FILE_RE = /\.(wav|mp3|ogg|flac|aiff?)$/i;
 
@@ -315,8 +314,17 @@ export function initArrangementDropTarget({ store, engine, api /* , mixer, sampl
   function renderAllClips() {
     const lanes = Array.from(timeline.querySelectorAll('.lane'));
     lanes.forEach((lane) => {
-      // Wipe existing runtime-rendered clips
-      lane.querySelectorAll('.clip').forEach((c) => c.remove());
+      // Wipe existing runtime-rendered clips. Unhook the shared
+      // ResizeObserver first — otherwise it holds strong refs to
+      // now-detached clip elements and they never get GC'd.
+      lane.querySelectorAll('.clip').forEach((c) => {
+        if (_resizeObs && c._waveObserved) {
+          try { _resizeObs.unobserve(c); } catch { /* no-op */ }
+        }
+        const pending = _pendingPaint.get(c);
+        if (pending != null) cancelAnimationFrame(pending);
+        c.remove();
+      });
     });
     const arr = store.data.arrangement || [];
     for (const clip of arr) {
@@ -510,9 +518,14 @@ export function initArrangementPlayhead({ store, engine }) {
       playhead.style.left = '0%';
       return;
     }
-    const loopLen = engine._getLoopLength() || 16;
-    const pos = (store.currentBeat % loopLen) / loopLen;
-    playhead.style.left = (pos * 100).toFixed(3) + '%';
+    // Keep playhead math in the same coordinate system as clip rendering:
+    // both denominators are TOTAL_BEATS (the 64-beat canvas). Previously the
+    // playhead used `_getLoopLength()` (in 16th-note steps) which made it
+    // visually race ahead of clips when the arrangement was shorter than
+    // 64 beats.  `store.currentBeat` is in 16th-note steps; /4 → beats.
+    const beats = (store.currentBeat || 0) / 4;
+    const pct = (beats / TOTAL_BEATS) * 100;
+    playhead.style.left = pct.toFixed(3) + '%';
   }
 
   // main.js emits 'tick' each rAF while playing — cheapest way to get
