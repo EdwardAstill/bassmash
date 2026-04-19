@@ -296,6 +296,15 @@ export function initScheduler({ store, sampler, mixer, engine }) {
     }
   });
 
+  // Loop wrap — hard-stop any in-flight audio sources so clips with
+  // no lengthBeats (play-to-natural-end) don't bleed past the loop point.
+  store.on('loopWrap', () => {
+    for (const src of _activeAudioSources) {
+      try { src.stop(); } catch (_) { /* already stopped */ }
+    }
+    _activeAudioSources.length = 0;
+  });
+
   // Hard-stop everything on transport stop.
   store.on('transport', (state) => {
     if (state !== 'stop') return;

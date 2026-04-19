@@ -57,6 +57,10 @@ class AudioEngine {
     store.emit('transport', 'stop');
     this._stopScheduler();
   }
+  setLooping(on) {
+    this.looping = !!on;
+    store.emit('loopChanged', this.looping);
+  }
   _startScheduler() {
     this._stopScheduler();
     this._schedulerTimer = setInterval(() => this._schedule(), this._scheduleInterval);
@@ -67,13 +71,21 @@ class AudioEngine {
   _schedule() {
     const loopLen = this._getLoopLength();
     while (this._nextBeatTime < this.ctx.currentTime + this._lookahead) {
-      // Wrap beat for looping
+      // Loop OFF + past end of arrangement → stop the transport. Otherwise
+      // the engine would keep ticking silently forever.
+      if (!this.looping && this._currentBeat >= loopLen) {
+        this.stop();
+        return;
+      }
       const beat = this.looping ? (this._currentBeat % loopLen) : this._currentBeat;
       store.currentBeat = beat;
       store.emit('beat', { beat, time: this._nextBeatTime });
       this._currentBeat++;
       if (this.looping && this._currentBeat >= loopLen) {
         this._currentBeat = 0;
+        // Hard-stop in-flight sources so clips with `lengthBeats: 0` (play
+        // to natural end) don't bleed past the loop boundary.
+        store.emit('loopWrap');
       }
       // P3 #11 — advance by the 16th-note duration at the step we just
       // emitted, so tempo changes take effect on the next beat boundary.

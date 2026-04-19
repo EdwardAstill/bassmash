@@ -37,6 +37,16 @@ export function initHeader({ ensureAudio }) {
     else playBtn.removeAttribute('data-active');
   });
 
+  // Sync loop-button active state — on by default.
+  const loopBtn = root.querySelector('[data-action="loop"]');
+  function paintLoop() {
+    if (!loopBtn) return;
+    if (engine.looping) loopBtn.setAttribute('data-active', 'true');
+    else loopBtn.removeAttribute('data-active');
+  }
+  paintLoop();
+  store.on('loopChanged', paintLoop);
+
   // Re-render on BPM change from elsewhere
   store.on('change', ({ path }) => {
     if (path === 'bpm' && bpmEl) bpmEl.textContent = String(store.data.bpm);
@@ -58,7 +68,7 @@ function handleTransport(action) {
       store.currentBeat = Math.max(0, (store.currentBeat || 0) - 4);
       break;
     case 'loop':
-      engine.looping = !engine.looping;
+      engine.setLooping(!engine.looping);
       break;
     case 'record':
       // stub for phase 0
