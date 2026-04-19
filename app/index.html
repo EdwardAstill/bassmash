@@ -1,20 +1,302 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bassmash</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script type="module" src="/js/main.js?v=phase0"></script>
 </head>
 <body>
-  <div id="toolbar"></div>
-  <div id="main">
-    <div id="browser"></div>
-    <div id="channel-rack"></div>
-    <div id="playlist"></div>
-    <div id="mixer"></div>
+  <div class="daw" data-theme="light" data-accent="zinc">
+
+    <!-- ZONE 1 — MAIN HEADER -->
+    <header class="zone zone--header" data-zone="1">
+      <div class="menu-bar">
+        <div class="menu-bar__logo">◆ Bassmash</div>
+        <nav class="menu-bar__menus">
+          <button class="menu-bar-button">File</button>
+          <button class="menu-bar-button">Edit</button>
+          <button class="menu-bar-button">View</button>
+          <button class="menu-bar-button">Track</button>
+          <button class="menu-bar-button">Transport</button>
+          <button class="menu-bar-button">Options</button>
+          <button class="menu-bar-button">Help</button>
+        </nav>
+      </div>
+
+      <div class="header__center">
+        <div class="transport-bar">
+          <button class="transport-bar__btn" data-action="rewind-to-start" title="Go to start">⏮</button>
+          <button class="transport-bar__btn" data-action="rewind" title="Rewind">⏪</button>
+          <button class="transport-bar__btn" data-action="stop" title="Stop">⏹</button>
+          <button class="transport-bar__btn transport-bar__btn--play" data-action="play" title="Play">▶</button>
+          <button class="transport-bar__btn transport-bar__btn--record" data-action="record" title="Record">●</button>
+          <button class="transport-bar__btn" data-action="loop" title="Loop">⟲</button>
+        </div>
+
+        <div class="time-display">
+          <span class="time-display__main" data-field="position">001 · 01 · 1 · 000</span>
+          <span class="time-display__sub" data-field="elapsed">00:00:00:00</span>
+        </div>
+
+        <div class="key-group">
+          <div class="key-group__item"><span class="key-group__label">BPM</span><span class="key-group__value" data-field="bpm" contenteditable="true" spellcheck="false">140</span></div>
+          <div class="key-group__item"><span class="key-group__label">KEY</span><span class="key-group__value" data-field="key">C min</span></div>
+          <div class="key-group__item"><span class="key-group__label">SIG</span><span class="key-group__value" data-field="sig">4/4</span></div>
+        </div>
+      </div>
+
+      <div class="header__right">
+        <div class="meter"><span class="meter__label">CPU</span><div class="meter__bar"><i class="meter__fill" style="width:34%"></i></div><span class="meter__value">34%</span></div>
+        <div class="meter"><span class="meter__label">DISK</span><div class="meter__bar"><i class="meter__fill" style="width:12%"></i></div><span class="meter__value">12%</span></div>
+        <div class="meter"><span class="meter__label">RAM</span><div class="meter__bar"><i class="meter__fill" style="width:58%"></i></div><span class="meter__value">5.8G</span></div>
+      </div>
+    </header>
+
+    <!-- ZONE 2 — TOOLBAR -->
+    <div class="zone zone--toolbar" data-zone="2">
+      <div class="toolbar__group">
+        <button class="toolbar__btn toolbar__btn--active" title="Select (V)">↖ Select</button>
+        <button class="toolbar__btn" title="Pen / Draw (B)">✎ Pen</button>
+        <button class="toolbar__btn" title="Scissor (C)">✂ Split</button>
+        <button class="toolbar__btn" title="Glue (G)">⌘ Glue</button>
+        <button class="toolbar__btn" title="Mute (M)">⊘ Mute</button>
+        <button class="toolbar__btn" title="Erase (E)">⌫ Erase</button>
+        <button class="toolbar__btn" title="Zoom (Z)">⎈ Zoom</button>
+      </div>
+      <div class="toolbar__separator"></div>
+      <div class="toolbar__group">
+        <button class="toolbar__btn" title="Snap">▦ 1/16</button>
+        <button class="toolbar__btn" title="Quantize">Q</button>
+        <button class="toolbar__btn" title="Grid">Grid</button>
+      </div>
+      <div class="toolbar__separator"></div>
+      <div class="toolbar__group">
+        <button class="toolbar__btn" title="Undo">⟲ Undo</button>
+        <button class="toolbar__btn" title="Redo">⟳ Redo</button>
+      </div>
+    </div>
+
+    <!-- ZONE 3 — BROWSER -->
+    <aside class="zone zone--browser" data-zone="3">
+      <div class="panel__title">Browser</div>
+      <div class="tab-bar tab-bar--compact">
+        <button class="tab-bar__tab tab-bar__tab--active">Sounds</button>
+        <button class="tab-bar__tab">Plugins</button>
+        <button class="tab-bar__tab">Files</button>
+      </div>
+      <div class="search-input">
+        <span class="search-input__icon">⌕</span>
+        <input placeholder="Search library…" />
+      </div>
+      <div class="tree">
+        <div class="tree__section">▾ Drums</div>
+        <div class="tree-item">Kick 909 Deep</div>
+        <div class="tree-item">Kick Analog Punch</div>
+        <div class="tree-item">Snare Trap 05</div>
+        <div class="tree-item">Hat Closed Crisp</div>
+        <div class="tree-item">Clap Layered</div>
+        <div class="tree__section">▾ Bass</div>
+        <div class="tree-item tree-item--selected">Reese Bass Mvp</div>
+        <div class="tree-item">Sub Sine 50Hz</div>
+        <div class="tree-item">Acid Squelch</div>
+        <div class="tree__section">▾ Synths / Pads</div>
+        <div class="tree-item">Dream Pad Wide</div>
+        <div class="tree-item">Pluck Bell FM</div>
+        <div class="tree-item">Lead Saw Detuned</div>
+        <div class="tree__section">▸ Vocals</div>
+        <div class="tree__section">▸ FX &amp; Risers</div>
+        <div class="tree__section">▸ Loops</div>
+      </div>
+    </aside>
+
+    <!-- ZONE 4 — INSPECTOR -->
+    <aside class="zone zone--inspector" data-zone="4">
+      <div class="panel__title">Inspector · Bass 01</div>
+
+      <div class="inspector__section">
+        <div class="inspector__row"><span class="inspector__k">Track</span><span class="inspector__v">Bass 01</span></div>
+        <div class="inspector__row"><span class="inspector__k">Type</span><span class="inspector__v">MIDI</span></div>
+        <div class="inspector__row"><span class="inspector__k">Output</span><span class="inspector__v">Master</span></div>
+        <div class="inspector__row"><span class="inspector__k">Input</span><span class="inspector__v">None</span></div>
+      </div>
+
+      <div class="inspector__heading">Volume</div>
+      <div class="fader-block">
+        <div class="knob knob--lg"></div>
+        <div class="fader-block__meta">
+          <div class="fader-block__value">−6.2 dB</div>
+          <div class="fader-block__label">Gain</div>
+        </div>
+      </div>
+
+      <div class="inspector__heading">Pan / Width</div>
+      <div class="knob-row">
+        <div class="knob-group"><div class="knob knob--sm"></div><span class="knob-group__label">C</span></div>
+        <div class="knob-group"><div class="knob knob--sm"></div><span class="knob-group__label">100</span></div>
+      </div>
+
+      <div class="inspector__heading">EQ · 4-band</div>
+      <div class="eq-preview">
+        <svg viewBox="0 0 160 60" preserveAspectRatio="none">
+          <line x1="0" y1="30" x2="160" y2="30" stroke="var(--border)" stroke-dasharray="2 3"/>
+          <path d="M0,30 Q20,10 45,28 T95,35 T160,22" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        </svg>
+      </div>
+
+      <div class="inspector__heading">FX Chain</div>
+      <ul class="fx-chain">
+        <li class="fx-chain__item"><span>Saturator</span><span class="fx-chain__status fx-chain__status--on">ON</span></li>
+        <li class="fx-chain__item"><span>Comp VCA</span><span class="fx-chain__status fx-chain__status--on">ON</span></li>
+        <li class="fx-chain__item"><span>EQ 4-band</span><span class="fx-chain__status fx-chain__status--on">ON</span></li>
+        <li class="fx-chain__item"><span>Limiter</span><span class="fx-chain__status fx-chain__status--off">OFF</span></li>
+        <li class="fx-chain__item fx-chain__item--add">＋ Add device</li>
+      </ul>
+    </aside>
+
+    <!-- ZONE 5 — GLOBAL STRIP -->
+    <div class="zone zone--global-strip" data-zone="5">
+      <div class="global-strip__row global-strip__row--ruler">
+        <span>1</span><span>5</span><span>9</span><span>13</span><span>17</span><span>21</span><span>25</span><span>29</span><span>33</span><span>37</span><span>41</span><span>45</span><span>49</span><span>53</span><span>57</span><span>61</span><span>65</span>
+      </div>
+      <div class="global-strip__row global-strip__row--markers">
+        <div class="marker" style="left:2%">Intro</div>
+        <div class="marker marker--verse" style="left:14%">Verse</div>
+        <div class="marker marker--chorus" style="left:34%">Chorus</div>
+        <div class="marker" style="left:52%">Verse 2</div>
+        <div class="marker marker--chorus" style="left:68%">Chorus</div>
+        <div class="marker" style="left:86%">Outro</div>
+      </div>
+      <div class="global-strip__row global-strip__row--tempo">
+        <span class="tempo-tag">♩ 128</span>
+        <span class="tempo-tag" style="left:40%">♩ 128 → 140</span>
+        <span class="tempo-tag" style="left:70%">♩ 140</span>
+      </div>
+    </div>
+
+    <!-- ZONE 6 — ARRANGEMENT -->
+    <section class="zone zone--arrangement" data-zone="6">
+      <div class="arrangement">
+
+        <div class="arrangement__track-list"></div>
+
+        <div class="arrangement__timeline">
+          <div class="playhead" style="left:0%"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ZONE 7 — WORKBENCH -->
+    <section class="zone zone--workbench" data-zone="7">
+      <div class="tab-bar">
+        <button class="tab-bar__tab tab-bar__tab--active">Mixer</button>
+        <button class="tab-bar__tab">Piano Roll</button>
+        <button class="tab-bar__tab">Automation</button>
+        <button class="tab-bar__tab">Sampler</button>
+        <span class="tab-bar__spacer"></span>
+        <button class="tool-panel-button" title="Fold">▁</button>
+        <button class="tool-panel-button" title="Pop out">▢</button>
+      </div>
+
+      <div class="mixer">
+        <!-- Track channel-strips are generated dynamically from store.data.tracks in app/js/ui/zones/mixer.js -->
+        <div class="mixer__tracks"></div>
+        <div class="channel-strip channel-strip--bus" data-color="violet">
+          <div class="channel-strip__accent"></div>
+          <div class="channel-strip__name">BUS A · Reverb</div>
+          <div class="channel-strip__fader"><div class="fader-cap" style="bottom:42%"></div><div class="fader-meter fader-meter--l" style="height:48%"></div><div class="fader-meter fader-meter--r" style="height:46%"></div></div>
+          <div class="channel-strip__db">−11</div>
+        </div>
+        <div class="channel-strip channel-strip--bus" data-color="blue">
+          <div class="channel-strip__accent"></div>
+          <div class="channel-strip__name">BUS B · Delay</div>
+          <div class="channel-strip__fader"><div class="fader-cap" style="bottom:36%"></div><div class="fader-meter fader-meter--l" style="height:40%"></div><div class="fader-meter fader-meter--r" style="height:38%"></div></div>
+          <div class="channel-strip__db">−13</div>
+        </div>
+        <div class="channel-strip channel-strip--master" data-color="zinc">
+          <div class="channel-strip__accent"></div>
+          <div class="channel-strip__name">MASTER</div>
+          <div class="channel-strip__inserts"><i>Bus</i><i>EQ</i><i>Glu</i><i>Lim</i></div>
+          <div class="channel-strip__fader"><div class="fader-cap" style="bottom:70%"></div><div class="fader-meter fader-meter--l" style="height:82%"></div><div class="fader-meter fader-meter--r" style="height:80%"></div></div>
+          <div class="channel-strip__db">−1.2</div>
+          <div class="channel-strip__mr"><span class="mr-btn">M</span><span class="mr-btn mr-btn--solo">S</span><span class="mr-btn mr-btn--rec">R</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ZONE 8 — UTILITY -->
+    <aside class="zone zone--utility" data-zone="8">
+      <div class="tab-bar tab-bar--compact">
+        <button class="tab-bar__tab tab-bar__tab--active">Notes</button>
+        <button class="tab-bar__tab">Help</button>
+        <button class="tab-bar__tab">History</button>
+      </div>
+
+      <div class="utility__section">
+        <div class="panel__title panel__title--inline">Session Notes</div>
+        <textarea class="notepad" spellcheck="false">• Try cutting low-mids on Bass 01
+  around 250 Hz.
+• Double hook vocal w/ pitch -12.
+• Chorus needs more top-end air.
+• Bus A wet too long — 1.8 s → 1.2 s.
+• Mixdown check Thu on monitors.</textarea>
+      </div>
+
+      <div class="utility__section">
+        <div class="panel__title panel__title--inline">Undo History</div>
+        <ul class="history">
+          <li class="history__item history__item--current">Move clip · Bass 01</li>
+          <li class="history__item">Duplicate · Kick Loop A</li>
+          <li class="history__item">Add device · Limiter</li>
+          <li class="history__item">Rename track · Pluck FM</li>
+          <li class="history__item">Add marker · Chorus</li>
+          <li class="history__item">Change tempo · 128 → 140</li>
+        </ul>
+      </div>
+
+      <div class="utility__section">
+        <div class="panel__title panel__title--inline">Meta</div>
+        <div class="meta-grid">
+          <div><span class="meta-grid__k">Length</span><span class="meta-grid__v">3:42</span></div>
+          <div><span class="meta-grid__k">Bars</span><span class="meta-grid__v">64</span></div>
+          <div><span class="meta-grid__k">SR</span><span class="meta-grid__v">48 kHz</span></div>
+          <div><span class="meta-grid__k">Bit</span><span class="meta-grid__v">24</span></div>
+          <div><span class="meta-grid__k">Tracks</span><span class="meta-grid__v">10</span></div>
+          <div><span class="meta-grid__k">Clips</span><span class="meta-grid__v">38</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ZONE 9 — STATUS BAR -->
+    <footer class="zone zone--status" data-zone="9">
+      <span class="status-bar__hint">Drag to move clip · <kbd>Shift</kbd>+drag to copy · <kbd>Alt</kbd>+drag free-move</span>
+      <span class="status-bar__spacer"></span>
+      <span class="status-bar__chip" data-field="engine-status">○ Audio Engine · click to start</span>
+      <span class="status-bar__chip" data-field="latency">— smp · — ms</span>
+      <span class="status-bar__chip" data-field="cpu">CPU —</span>
+      <span class="status-bar__chip" data-field="autosave">Saved</span>
+      <span class="status-bar__chip" data-field="export-status" hidden></span>
+      <span class="status-bar__chip" data-field="project-name">no project</span>
+    </footer>
+
+    <!-- zone legend -->
+    <div class="zone-legend" aria-hidden="true">
+      <span class="zone-tag zone-tag--1">① Header</span>
+      <span class="zone-tag zone-tag--2">② Toolbar</span>
+      <span class="zone-tag zone-tag--3">③ Browser</span>
+      <span class="zone-tag zone-tag--4">④ Inspector</span>
+      <span class="zone-tag zone-tag--5">⑤ Global strip</span>
+      <span class="zone-tag zone-tag--6">⑥ Arrangement</span>
+      <span class="zone-tag zone-tag--7">⑦ Workbench</span>
+      <span class="zone-tag zone-tag--8">⑧ Utility</span>
+      <span class="zone-tag zone-tag--9">⑨ Status</span>
+    </div>
+
   </div>
-  <div id="piano-roll-overlay" class="hidden"></div>
-  <script type="module" src="/js/main.js"></script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 import { store } from '../state.js';
+import { bpmAtBeat } from './tempo.js';
 
 class AudioEngine {
   constructor() {
@@ -23,7 +24,10 @@ class AudioEngine {
   }
   get sampleRate() { return this.ctx.sampleRate; }
   get currentTime() { return this.ctx.currentTime; }
-  _secondsPerBeat() { return 60 / store.data.bpm; }
+  // Default / fallback quarter-note duration. Prefer _secondsPerBeatAt(beat)
+  // inside the scheduler so tempo changes (P3 #11) are honored.
+  _secondsPerBeat() { return 60 / (store.data.bpm || 140); }
+  _secondsPerBeatAt(beat) { return 60 / bpmAtBeat(store.data, beat); }
 
   /** Get the loop length in 16th notes based on arrangement, or default 16 (1 bar) */
   _getLoopLength() {
@@ -71,7 +75,9 @@ class AudioEngine {
       if (this.looping && this._currentBeat >= loopLen) {
         this._currentBeat = 0;
       }
-      this._nextBeatTime += this._secondsPerBeat() / 4;
+      // P3 #11 — advance by the 16th-note duration at the step we just
+      // emitted, so tempo changes take effect on the next beat boundary.
+      this._nextBeatTime += this._secondsPerBeatAt(beat) / 4;
     }
   }
   connectToMaster(node) { node.connect(this.masterGain); }

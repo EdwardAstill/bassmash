@@ -1,240 +1,144 @@
-import { api } from './api.js';
+// Bassmash — boot entry (phase 0)
+// Responsibilities:
+//   1. Load or create a project via the FastAPI backend
+//   2. Initialize AudioContext on first user gesture (browser autoplay policy)
+//   3. Wire each zone via its initZone() module
+//   4. Expose a render tick for playhead / meters (stubbed for phase 0)
+
 import { store } from './state.js';
-import { engine } from './audio/engine.js';
+import { api }   from './api.js';
+import { engine }  from './audio/engine.js';
+import { mixer }   from './audio/mixer.js';
 import { sampler } from './audio/sampler.js';
-import { mixer } from './audio/mixer.js';
-import { Synth } from './audio/synth.js';
-import { initTopbar } from './ui/topbar.js';
-import { initTimeline } from './ui/timeline.js';
-import { initChannelRack } from './ui/step-sequencer.js';
-import { initMixerPanel } from './ui/mixer-panel.js';
-import { initBrowser } from './ui/browser.js';
-import { initPianoRoll } from './ui/piano-roll.js';
-import { midiToFreq } from './ui/utils.js';
-import { loadWaveform, getCached } from './audio/waveform.js';
 
-const synth = new Synth();
+import { initHeader }    from './ui/zones/header.js';
+import { initToolbar }   from './ui/zones/toolbar.js';
+import { initBrowser }   from './ui/zones/browser.js';
+import { initWorkbench } from './ui/zones/workbench.js';
+import { initUtility }   from './ui/zones/utility.js';
+import { initStatusBar } from './ui/zones/status-bar.js';
+import { initMixer }     from './ui/zones/mixer.js';
+import { initArrangementDropTarget, initArrangementPlayhead } from './ui/zones/arrangement.js';
+import { initScheduler } from './audio/scheduler.js';
+import { initInspector }        from './ui/zones/inspector.js';
+import { initClipInteractions } from './ui/zones/clip-interactions.js';
+import { initGlobalStrip }      from './ui/zones/global-strip.js';
+import { initUndoRedo }         from './undo.js';
+import { initTrackManager }     from './ui/track-manager.js';
+import { initExportMenu }       from './ui/export-menu.js';
+import { initProjectPicker }    from './ui/project-picker.js';
 
-async function init() {
-  const _activeAudioSources = [];
-  engine.init();
-  store.setSaveFn(async (data) => {
-    if (store.projectName) await api.saveProject(store.projectName, data);
-  });
-  initTopbar();
-  initTimeline();
-  initMixerPanel();
-  initChannelRack(document.getElementById('channel-rack'));
-  initBrowser(document.getElementById('browser'));
+// ──────────────────────────────────────────────────────────────────
+// Audio-context init (deferred to first user gesture)
+// ──────────────────────────────────────────────────────────────────
+let _audioReady = false;
+let _audioInitPromise = null;
 
-  const overlay = document.getElementById('piano-roll-overlay');
-  overlay.innerHTML = `
-    <div class="piano-roll-window">
-      <div class="piano-roll-titlebar">
-        <span id="piano-roll-title">Piano Roll</span>
-        <button class="piano-roll-close">&#x2715;</button>
-      </div>
-      <div class="piano-roll-content"></div>
-    </div>
-  `;
-  const prContent = overlay.querySelector('.piano-roll-content');
-  const prTitle = overlay.querySelector('#piano-roll-title');
-
-  function openPianoRoll(patternIdx) {
-    store.selectedPattern = patternIdx;
-    const pattern = store.data.patterns[patternIdx];
-    prTitle.textContent = pattern ? `Piano Roll \u2014 ${pattern.name}` : 'Piano Roll';
-    overlay.classList.remove('hidden');
-    initPianoRoll(prContent);
-  }
-
-  function closePianoRoll() {
-    overlay.classList.add('hidden');
-  }
-
-  overlay.querySelector('.piano-roll-close').addEventListener('click', closePianoRoll);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePianoRoll(); });
-
-  const prTitlebar = overlay.querySelector('.piano-roll-titlebar');
-  let prDragState = null;
-  prTitlebar.addEventListener('mousedown', (e) => {
-    const win = overlay.querySelector('.piano-roll-window');
-    const rect = win.getBoundingClientRect();
-    prDragState = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top };
-    win.style.position = 'fixed';
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', (e) => {
-    if (!prDragState) return;
-    const win = overlay.querySelector('.piano-roll-window');
-    win.style.left = (prDragState.origLeft + e.clientX - prDragState.startX) + 'px';
-    win.style.top  = (prDragState.origTop  + e.clientY - prDragState.startY) + 'px';
-  });
-  window.addEventListener('mouseup', () => { prDragState = null; });
-
-  store.on('openPianoRoll', openPianoRoll);
-
-  store.on('transport', (evt) => {
-    if (evt === 'stop') {
-      for (const src of _activeAudioSources) {
-        try { src.stop(); } catch (_) {}
-      }
-      _activeAudioSources.length = 0;
-    }
-  });
-  store.on('uploadAndCreateAudioTrack', async (file) => {
-    const result = await api.uploadAudio(store.projectName, file);
-    store.audioFiles = await api.listAudio(store.projectName);
-    store.emit('audioFilesChanged');
-    store.emit('createAudioTrackFromRef', { audioRef: result.filename, startBeat: 0 });
-  });
-  store.on('beat', ({ beat, time }) => {
-    // Audio clip playback
-    for (const clip of store.data.arrangement) {
-      if (clip.type !== 'audio') continue;
-      const track = store.data.tracks[clip.trackIndex];
-      if (!track || track.muted) continue;
-      const clipStartStep = clip.startBeat * 4;
-      if (beat !== clipStartStep) continue;
-      const ch = mixer.channels[clip.trackIndex];
-      if (!ch) continue;
-      const url = api.audioUrl(store.projectName, clip.audioRef);
-      const cached = getCached(url);
-      if (!cached || !cached.audioBuf) continue;
-      const source = engine.ctx.createBufferSource();
-      source.buffer = cached.audioBuf;
-      source.connect(ch.input);
-      source.start(time, clip.offset || 0);
-      const secondsPerBeat = 60 / (store.data.bpm * 4);
-      source.stop(time + clip.lengthBeats * secondsPerBeat);
-      _activeAudioSources.push(source);
-      source.onended = () => {
-        const idx = _activeAudioSources.indexOf(source);
-        if (idx !== -1) _activeAudioSources.splice(idx, 1);
-      };
-    }
-    for (let t = 0; t < store.data.tracks.length; t++) {
-      const track = store.data.tracks[t];
-      if (track.muted) continue;
-      const channel = mixer.channels[t];
-      if (!channel) continue;
-      for (const clip of store.data.arrangement) {
-        if (clip.trackIndex !== t) continue;
-        const clipStartStep = clip.startBeat * 4;
-        const clipEndStep = (clip.startBeat + clip.lengthBeats) * 4;
-        if (beat < clipStartStep || beat >= clipEndStep) continue;
-        const localStep = beat - clipStartStep;
-        const pattern = store.data.patterns[clip.patternIndex];
-        if (!pattern) continue;
-        if (pattern.steps) {
-          const stepIdx = localStep % (pattern.stepCount || 16);
-          for (const row of pattern.steps) {
-            if (row.cells[stepIdx]) {
-              const velocity = (row.velocities && row.velocities[stepIdx]) || 100;
-              const gain = velocity / 127;
-              if (row.sampleRef) sampler.play(row.sampleRef, time, channel.input, { playbackRate: gain });
-            }
-          }
-        }
-        if (pattern.notes) {
-          const spb = engine._secondsPerBeat() / 4;
-          for (const note of pattern.notes) {
-            if (note.start === localStep % (pattern.length || 64)) {
-              const duration = note.duration * spb;
-              const freq = midiToFreq(note.pitch);
-              synth.playNote(freq, time, duration, track.synthParams || {}, channel.input);
-            }
-          }
-        }
-      }
-    }
-  });
-  await showProjectPicker();
+async function ensureAudio() {
+  if (_audioReady) return;
+  if (_audioInitPromise) return _audioInitPromise;
+  _audioInitPromise = (async () => {
+    engine.init();
+    if (engine.ctx.state === 'suspended') await engine.ctx.resume();
+    _audioReady = true;
+    store.emit('engineReady');
+    console.info('[bassmash] audio ready · sr=' + engine.ctx.sampleRate);
+  })();
+  return _audioInitPromise;
 }
 
-async function showProjectPicker() {
-  const projects = await api.listProjects();
-  const dialog = document.createElement('div');
-  dialog.id = 'project-picker';
-  dialog.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:1000;';
-  dialog.innerHTML = `
-    <div style="background:#0a0a0a;padding:32px;border-radius:4px;min-width:360px;max-width:420px;border:1px solid #1c1c1c;box-shadow:0 24px 64px rgba(0,0,0,0.8);">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
-        <div style="width:36px;height:36px;background:#fff;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#000;font-family:'JetBrains Mono',monospace;">B</div>
-        <div>
-          <h2 style="color:#fff;font-family:'DM Sans',system-ui;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Bassmash</h2>
-          <div style="color:#555;font-size:10px;font-family:'JetBrains Mono',monospace;letter-spacing:1px;text-transform:uppercase;">Beat Studio</div>
-        </div>
-      </div>
-      <div style="margin-bottom:12px;">
-        <input id="new-project-name" placeholder="Project name..."
-          style="width:100%;padding:10px 14px;background:#111;border:1px solid #1c1c1c;color:#fff;border-radius:3px;font-family:'DM Sans',system-ui;font-size:13px;outline:none;transition:border-color 0.15s;"
-          onfocus="this.style.borderColor='#555'"
-          onblur="this.style.borderColor='#1c1c1c'">
-      </div>
-      <button id="create-project-btn" style="width:100%;background:#fff;color:#000;border:none;padding:10px;border-radius:3px;cursor:pointer;font-family:'DM Sans',system-ui;font-size:13px;font-weight:700;letter-spacing:0.3px;transition:background 0.1s;"
-        onmouseenter="this.style.background='#aaa'"
-        onmouseleave="this.style.background='#fff'"
-      >Create New Project</button>
-      ${projects.length > 0 ? `
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1c1c1c;">
-          <div style="color:#555;font-size:9px;font-family:'JetBrains Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">Recent Projects</div>
-          <div style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
-            ${projects.map(name => `
-              <div class="project-item" data-name="${name}" style="padding:10px 12px;cursor:pointer;color:#aaa;border-radius:3px;font-weight:500;transition:all 0.1s;display:flex;align-items:center;gap:8px;">
-                <span style="color:#555;font-size:12px;">&#9835;</span> ${name}
-              </div>
-            `).join('')}
-          </div>
-        </div>
-      ` : ''}
-    </div>
-  `;
-  document.body.appendChild(dialog);
-  document.getElementById('create-project-btn').addEventListener('click', async () => {
-    const name = document.getElementById('new-project-name').value.trim();
-    if (!name) return;
-    await api.createProject(name);
-    await loadProject(name);
-    dialog.remove();
-  });
-  dialog.querySelectorAll('.project-item').forEach(el => {
-    el.addEventListener('click', async () => { await loadProject(el.dataset.name); dialog.remove(); });
-    el.addEventListener('mouseenter', () => { el.style.background = '#1a1a1a'; el.style.color = '#fff'; });
-    el.addEventListener('mouseleave', () => { el.style.background = 'transparent'; el.style.color = '#aaa'; });
-  });
-}
+// ──────────────────────────────────────────────────────────────────
+// Project load (phase 0: pick first, or create default)
+// ──────────────────────────────────────────────────────────────────
+const DEFAULT_PROJECT = 'default';
 
-async function loadProject(name) {
+async function loadInitialProject() {
+  let names;
+  try { names = await api.listProjects(); }
+  catch (e) { console.warn('[bassmash] listProjects failed', e); names = []; }
+
+  let name = names[0];
+  if (!name) {
+    await api.createProject(DEFAULT_PROJECT).catch((e) =>
+      console.warn('[bassmash] createProject failed', e)
+    );
+    name = DEFAULT_PROJECT;
+  }
   const data = await api.getProject(name);
   store.load(name, data);
-  for (const track of data.tracks) mixer.createChannel(track.name);
-  await sampler.preloadProject();
-  store.audioFiles = await api.listAudio(name);
-  for (const clip of data.arrangement) {
-    if (clip.type === 'audio' && clip.audioRef) {
-      const url = api.audioUrl(name, clip.audioRef);
-      loadWaveform(url, engine.ctx).then(() => store.emit('change', {}));
+  store.setSaveFn((d) => api.saveProject(name, d));
+  console.info(`[bassmash] loaded project "${name}" · ${data.tracks?.length || 0} tracks`);
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Render tick — 60fps for playhead + meters (no-op until phase 1+)
+// ──────────────────────────────────────────────────────────────────
+function startRenderLoop() {
+  function tick() {
+    if (_audioReady && store.playing) {
+      store.emit('tick', { time: engine.currentTime, beat: store.currentBeat });
     }
+    requestAnimationFrame(tick);
   }
-  if (data.patterns && data.patterns.length > 0) {
-    store.selectedPattern = 0;
-    store.emit('patternSelected', 0);
-  }
+  requestAnimationFrame(tick);
 }
 
-// AudioContext requires user gesture in most browsers
-let initialized = false;
-async function safeInit() {
-  if (initialized) return;
-  initialized = true;
-  await init();
+// ──────────────────────────────────────────────────────────────────
+// Boot
+// ──────────────────────────────────────────────────────────────────
+async function boot() {
+  const ctx = { store, api, engine, mixer, sampler, ensureAudio };
+
+  // Restore last-used tool before toolbar initializes (it reads store.currentTool).
+  try {
+    const saved = localStorage.getItem('bassmash.currentTool');
+    if (saved) store.currentTool = saved;
+  } catch (e) { /* localStorage unavailable — ignore */ }
+  store.on('toolChanged', (id) => {
+    try { localStorage.setItem('bassmash.currentTool', id); } catch (e) { /* ignore */ }
+  });
+
+  initHeader(ctx);
+  initToolbar(ctx);
+  initBrowser(ctx);
+  initWorkbench(ctx);
+  initUtility(ctx);
+  initStatusBar(ctx);
+
+  // Phase 1 modules
+  initMixer(ctx);
+  initArrangementDropTarget(ctx);
+  initArrangementPlayhead(ctx);
+
+  // Phase 2 modules
+  initInspector(ctx);
+  initClipInteractions(ctx);
+  initGlobalStrip(ctx);
+
+  // Phase 3 modules
+  initUndoRedo(ctx);
+  initTrackManager(ctx);
+
+  // P1 · Export MP3 (File menu → Export as MP3…)
+  initExportMenu(ctx);
+
+  // P3 · Project picker (File menu → Open/New Project…)
+  initProjectPicker(ctx);
+
+  // Scheduler needs AudioContext — wire after engineReady
+  store.on('engineReady', () => initScheduler(ctx));
+
+  const unlock = () => { ensureAudio().catch(console.error); };
+  document.addEventListener('pointerdown', unlock, { once: true, capture: true });
+
+  await loadInitialProject();
+  startRenderLoop();
 }
 
-document.addEventListener('click', safeInit, { once: true });
-// Also try on DOMContentLoaded in case AudioContext is allowed
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', safeInit);
+  document.addEventListener('DOMContentLoaded', boot);
 } else {
-  safeInit();
+  boot();
 }
+
+window.bassmash = { store, api, engine, mixer, ensureAudio };

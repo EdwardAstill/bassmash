@@ -51,7 +51,12 @@ export const api = {
       headers: { 'Content-Type': 'audio/wav' },
       body: wavBlob,
     });
-    return res.json();
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`export failed ${res.status}${text ? ': ' + text : ''}`);
+    }
+    // Backend returns the encoded MP3 bytes directly as `audio/mpeg`.
+    return res.blob();
   },
   async uploadAudio(projectName, file) {
     const form = new FormData();
@@ -68,5 +73,38 @@ export const api = {
   },
   audioUrl(projectName, filename) {
     return `${BASE}/projects/${encodeURIComponent(projectName)}/audio/${encodeURIComponent(filename)}`;
+  },
+  async renameAudio(projectName, filename, newName) {
+    const res = await fetch(
+      `${BASE}/projects/${encodeURIComponent(projectName)}/audio/${encodeURIComponent(filename)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName }),
+      },
+    );
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json())?.detail || ''; } catch (_) { /* non-json */ }
+      const err = new Error(detail || `rename failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const data = await res.json();
+    return data.filename;
+  },
+  async deleteAudio(projectName, filename) {
+    const res = await fetch(
+      `${BASE}/projects/${encodeURIComponent(projectName)}/audio/${encodeURIComponent(filename)}`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json())?.detail || ''; } catch (_) { /* non-json */ }
+      const err = new Error(detail || `delete failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json(); // { deleted: filename }
   },
 };

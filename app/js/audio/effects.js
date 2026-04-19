@@ -57,5 +57,31 @@ export class EffectsChain {
   setReverbMix(wet) { this.reverb.dry.gain.value = 1 - wet; this.reverb.wet.gain.value = wet; }
   setDelayTime(seconds) { this.delay.node.delayTime.value = seconds; }
   setDelayFeedback(value) { this.delay.feedback.gain.value = value; }
-  setEQ(band, gain) { this.eq[band].gain.value = gain; }
+  setEQ(band, gain) {
+    if (!this.eq || !this.eq[band]) return;
+    // Remember user-set value so enable/disable can restore it.
+    this.eq[band]._userGain = gain;
+    if (this.eq.enabled) this.eq[band].gain.value = gain;
+  }
+  // EQ bypass: lowshelf/peaking/highshelf are neutral at gain=0dB, so
+  // "disabled" forces the three band gains to 0 while remembering the
+  // last user-set values on enable. Matches the wet-dry pattern used
+  // by setDistortionMix / setDelayMix / setReverbMix semantically.
+  setEqEnabled(enabled) {
+    if (!this.eq) return;
+    const on = !!enabled;
+    this.eq.enabled = on;
+    const bands = ['low', 'mid', 'high'];
+    for (const b of bands) {
+      const node = this.eq[b];
+      if (!node) continue;
+      if (on) {
+        const v = node._userGain;
+        node.gain.value = (typeof v === 'number') ? v : 0;
+      } else {
+        if (typeof node._userGain !== 'number') node._userGain = node.gain.value;
+        node.gain.value = 0;
+      }
+    }
+  }
 }

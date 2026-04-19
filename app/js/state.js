@@ -10,6 +10,8 @@ class StateStore {
       tracks: [],
       patterns: [],
       arrangement: [],
+      markers: [],
+      tempoChanges: [],
     };
     this.audioFiles = [];
     this.playing = false;
@@ -41,9 +43,14 @@ class StateStore {
   setSaveFn(fn) { this._saveFn = fn; }
   _scheduleSave() {
     if (this._saveTimer) clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => {
-      if (this._saveFn) this._saveFn(this.data);
-      this.emit('saved');
+    this._saveTimer = setTimeout(async () => {
+      this.emit('saving');
+      try {
+        if (this._saveFn) await this._saveFn(this.data);
+        this.emit('saved');
+      } catch (err) {
+        this.emit('saveFailed', err);
+      }
     }, 2000);
   }
   load(projectName, data) {
@@ -60,6 +67,47 @@ class StateStore {
     this.data.patterns.push(pattern);
     this.emit('change', { path: 'patterns', value: this.data.patterns });
     this._scheduleSave();
+  }
+  removeTrack(index) {
+    if (index < 0 || index >= this.data.tracks.length) return;
+    this.data.tracks.splice(index, 1);
+    this.data.arrangement = this.data.arrangement
+      .filter(c => c.trackIndex !== index)
+      .map(c => c.trackIndex > index ? { ...c, trackIndex: c.trackIndex - 1 } : c);
+    if (this.selectedTrack === index) this.selectedTrack = null;
+    else if (this.selectedTrack != null && this.selectedTrack > index) this.selectedTrack--;
+    this.emit('change', { path: 'tracks' });
+    this.emit('trackSelected', this.selectedTrack);
+    this._scheduleSave();
+  }
+  duplicateTrack(index) {
+    const orig = this.data.tracks[index];
+    if (!orig) return null;
+    const copy = JSON.parse(JSON.stringify(orig));
+    copy.name = `${orig.name} copy`;
+    const newIdx = index + 1;
+    this.data.tracks.splice(newIdx, 0, copy);
+    for (const clip of this.data.arrangement) {
+      if (clip.trackIndex >= newIdx) clip.trackIndex++;
+    }
+    const srcClips = this.data.arrangement.filter(c => c.trackIndex === index);
+    for (const clip of srcClips) {
+      const cloned = { ...clip, trackIndex: newIdx };
+      if (clip.patternIndex != null) {
+        const srcPat = this.data.patterns[clip.patternIndex];
+        if (srcPat) {
+          const newPat = JSON.parse(JSON.stringify(srcPat));
+          newPat.name = `${srcPat.name} copy`;
+          this.data.patterns.push(newPat);
+          cloned.patternIndex = this.data.patterns.length - 1;
+          cloned.patternName = newPat.name;
+        }
+      }
+      this.data.arrangement.push(cloned);
+    }
+    this.emit('change', { path: 'tracks' });
+    this._scheduleSave();
+    return newIdx;
   }
 }
 export const store = new StateStore();

@@ -18,6 +18,11 @@ class Sampler {
     for (const track of store.data.tracks) {
       if (track.type === 'sample' && track.sampleRef) refs.add(track.sampleRef);
     }
+    for (const pattern of store.data.patterns || []) {
+      for (const row of pattern.steps || []) {
+        if (row.sampleRef) refs.add(row.sampleRef);
+      }
+    }
     await Promise.all([...refs].map(ref => this.load(ref)));
   }
   play(ref, time, destination, options = {}) {
