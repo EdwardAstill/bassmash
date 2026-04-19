@@ -2,7 +2,7 @@
 
 Supersedes the earlier checkpoint that listed P1–P3 as pending.
 
-All P1/P2/P3 items from the prior checkpoint are now delivered. Verified with 117 backend tests + a headless Firefox walkthrough showing zero console errors across every feature (transport, all 4 workbench tabs, all 3 browser tabs, File menu, project picker, send toggle, autosave, status chips).
+All P1/P2/P3 items from the prior checkpoint are now delivered, plus a follow-up wave of polish. Verified with 119 backend tests + a headless Firefox walkthrough showing zero console errors across every feature (transport, all 5 workbench tabs, all 3 browser tabs, File menu, project picker, send toggle, autosave, status chips, live sync between CLI/MCP and the browser).
 
 ---
 
@@ -38,6 +38,16 @@ All P1/P2/P3 items from the prior checkpoint are now delivered. Verified with 11
 
 ### Cleanup
 - Deleted 1159 lines of pre-9-zone orphans: `app/js/ui/{topbar,timeline,mixer-panel,step-sequencer}.js`, `app/js/audio/{export,waveform}.js`. Zero importers confirmed first.
+
+### Post-P3 follow-up wave
+- **Live sync** — SSE endpoint `GET /api/projects/{name}/events` polls `project.json` mtime every 500 ms and emits `project-updated`. Browser re-fetches and reloads on change; its own PUT mtime is tagged so autosave doesn't trigger self-reload. CLI + MCP edits surface in any open tab without manual refresh.
+- **MCP server enhancements** — 22 tools (was 16). New: `rename_track`, `set_track_sends`, `set_track_automation`, `set_synth_params`, `set_tempo_changes`, `set_markers`. `_save_project` is now atomic (tempfile + fsync + os.replace) and honors `$BASSMASH_PROJECTS_DIR`.
+- **Synth workbench tab** (`app/js/ui/workbench/synth-panel.js`) — 5th workbench tab. Waveform picker (4 single-period glyph buttons), filter type + cutoff + Q knobs, interactive 240×90 ADSR graph with draggable peak / sustain-knee / release handles. Inspector drops to a one-line summary.
+- **Transport polish** — `⟲` loop button lights up when active. Loop OFF + past-end-of-arrangement auto-stops the transport (previously ticked silently forever). On loop wrap, any in-flight audio clip `BufferSource` is hard-stopped so clips with `lengthBeats: 0` don't bleed past the loop point.
+- **Menu overlay fix** — File dropdown was clipped by zone `overflow: hidden`. Both `export-menu.js` and `project-picker.js` now append the popover to `document.body`, `position: fixed`, `z-index: 1200`, with `top/left` computed from the button's bounding rect.
+- **Favicon** — inline SVG data URI, no more 404.
+- **Dead code** — stripped the 9 debug zone-legend labels (`① Header` etc.) from the UI.
+- **Docs** — `README.md`, `docs/cli.md`, `docs/mcp.md`, `docs/api.md`, `docs/project-format.md`, `docs/development.md`. Full reference, not just a tagline.
 
 ---
 
@@ -129,26 +139,25 @@ $BASSMASH_KIT_DIR/           built-in drum kit served at kit://<filename>
 
 ## Known deferred items (not bugs, scoped-out during implementation)
 
-- **Automation beyond volume** — pan, sends, FX mix use the same breakpoint shape but the UI only exposes volume.
-- **In-DAW confirm/prompt dialogs** — rename and delete currently use `window.prompt` / `window.confirm`. Fine UX but not on-brand.
-- **Bus FX wet/dry UI** — bus A / bus B strips can't adjust their reverb/delay amount from the UI (baked to 1.0 / 0.5 by `ensureBuses()`).
-- **Marker/tempo delete UI** — only add flow exists. Right-click an existing entry would be natural.
+- **Audio-clip placement via MCP** — MCP `set_arrangement` only handles pattern clips. Audio-clip placement still needs `bassmash-cli arrange add-audio` or a raw edit.
+- **Bus FX parameters via MCP** — bus A wet / bus B wet / delay time / feedback are tweakable via the browser's bus-strip knobs only. No MCP tool yet — the `busMix` struct is on disk but not addressable.
 - **Legacy drum-pattern shape question** — `pattern.steps[]` with per-row `sampleRef` vs one-sample-per-track; open design question.
 - **Undo across `store.load` boundary** — history resets on load by design. May want a "restore session" path.
 - **No build pipeline / frontend tests** — raw ES modules, no bundler, no Vitest/Jest. Regressions rely on manual walkthrough + backend tests.
 - **`track.effects.eqEnabled` persistence** — EQ bypass works at runtime but isn't persisted; matches the existing no-persist pattern for dist/delay/reverb toggles. If added, do all four together.
 - **Header mock meters** (CPU/DISK/RAM in zone 1) still show hardcoded 34/12/58. The real CPU signal lives in the status-bar chip now.
+- **Tempo-change ramp resolution** — tempo is quantised to the 16th-note step; a fine-grained `linearRampToValueAtTime`-style tempo ramp would need a scheduler change.
 
 ---
 
 ## Next phase candidates
 
-1. **Extend automation to more params** — param selector in the automation tab, `setValueAtTime` on pan/send/FX-mix nodes.
-2. **In-DAW confirm dialog** — replace `window.prompt`/`confirm` with a styled modal.
-3. **Bus FX UI** — wet/dry knobs on the bus strips.
-4. **Marker/tempo right-click menu** — delete + edit on existing entries.
-5. **Front-end test harness** — Vitest + Playwright smokes for scheduler, offline-render, automation parity.
-6. **Real-time recording** — no audio input yet; requires decision on Record button semantics.
+1. **Front-end test harness** — Vitest + Playwright smokes for scheduler, offline-render, automation parity. Biggest remaining quality gap.
+2. **Real-time recording** — no audio input yet; requires decision on Record button semantics (MIDI capture? audio input? arm-track-for-export?).
+3. **MCP audio-clip placement** — `set_audio_arrangement(project, track_index, audio_ref, start_beat, length_beats, offset)` to close the MCP/CLI parity gap.
+4. **MCP bus FX tools** — expose `busMix` (Bus A reverb wet, Bus B delay/time/feedback) as MCP args.
+5. **track.effects.*Enabled persistence** — make the current per-track FX bypasses persist across load, not just runtime.
+6. **Fine-grained tempo ramps** — `linearRampToValueAtTime` on tempo would let swells and slowdowns feel smooth instead of stepping per 16th.
 
 ---
 

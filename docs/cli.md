@@ -1,6 +1,8 @@
 # `bassmash-cli` — Command Reference
 
-Filesystem-direct editor for Bassmash projects. Edits land atomically in `~/bassmash-projects/<name>/project.json` (or the directory named by `$BASSMASH_PROJECTS_DIR`). The browser picks the change up within ~500 ms via SSE.
+Filesystem-direct editor for Bassmash projects. Edits land atomically in `~/bassmash-projects/<name>/project.json` (or the directory named by `$BASSMASH_PROJECTS_DIR`) via `cli/store.py::write_project` — tempfile + fsync + `os.replace`. The browser picks the change up within ~500 ms via SSE.
+
+Every CLI command routes through the same disk-IO layer the FastAPI backend and the MCP server use, so CLI / browser autosave / AI agent edits never corrupt each other. Last writer wins; there's no multi-writer conflict detection.
 
 ## Install
 
@@ -159,7 +161,18 @@ Every command exits non-zero with `error: <message>` on stderr for:
 
 - Project / pattern / track index not found
 - BPM / velocity / pitch out of range
-- Invalid project name (see rule above)
+- Invalid project name (must match `^[A-Za-z0-9._-]+$`)
 - Cells string length mismatching the pattern's `stepCount`
 
 Ranges are enforced in `cli/project_ops.py` so the CLI, the MCP server, and any future caller share the same validation.
+
+## Gaps between CLI and MCP
+
+CLI is the superset for audio-clip placement and the built-in `analyse` commands. MCP is the superset for generative + bulk operations (`generate_beat`, `replicate_from_audio`, `set_track_automation`, `set_synth_params`, `set_tempo_changes`, `set_markers`). The canonical data model is identical — both write the same `project.json` shape documented in [`project-format.md`](./project-format.md).
+
+## See also
+
+- [`project-format.md`](./project-format.md) — the on-disk schema the CLI reads and writes.
+- [`mcp.md`](./mcp.md) — the 22 MCP tools for AI-driven editing.
+- [`api.md`](./api.md) — the HTTP API the browser uses. Same atomic writes.
+- [`development.md`](./development.md) — setup, testing, and contributing guide.
