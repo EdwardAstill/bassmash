@@ -10,6 +10,7 @@
 
 import { bpmAtBeat as sharedBpmAtBeat } from '../../audio/tempo.js';
 import { prompt as modalPrompt } from '../modal.js';
+import { openContextMenu } from '../context-menu.js';
 
 export function initGlobalStrip({ store, engine }) {
   const root = document.querySelector('.zone--global-strip');
@@ -26,51 +27,8 @@ export function initGlobalStrip({ store, engine }) {
   // Right-click on an existing element → show actions at cursor; empty-space
   // right-click still falls through to the add flow (element handlers
   // stopPropagation so the row-level add handler only fires on background).
-  let openCtxMenu = null;
-  function closeCtxMenu() {
-    if (openCtxMenu) { openCtxMenu.remove(); openCtxMenu = null; }
-    document.removeEventListener('pointerdown', onCtxOutsideDown, true);
-    document.removeEventListener('keydown', onCtxKey, true);
-  }
-  function onCtxOutsideDown(e) {
-    if (openCtxMenu && !openCtxMenu.contains(e.target)) closeCtxMenu();
-  }
-  function onCtxKey(e) {
-    if (e.key === 'Escape') closeCtxMenu();
-  }
-  function openContextMenu(ev, items) {
-    closeCtxMenu();
-    const ul = document.createElement('ul');
-    ul.className = 'global-strip-ctx-menu';
-    ul.style.left = ev.clientX + 'px';
-    ul.style.top  = ev.clientY + 'px';
-
-    items.forEach((it) => {
-      const li = document.createElement('li');
-      li.textContent = it.label;
-      if (it.variant) li.setAttribute('data-variant', it.variant);
-      li.addEventListener('click', () => {
-        try { it.onClick(); } finally { closeCtxMenu(); }
-      });
-      ul.appendChild(li);
-    });
-
-    document.body.appendChild(ul);
-    openCtxMenu = ul;
-
-    // Clamp to viewport.
-    const r = ul.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    if (r.right > vw)  ul.style.left = Math.max(0, vw - r.width - 4) + 'px';
-    if (r.bottom > vh) ul.style.top  = Math.max(0, vh - r.height - 4) + 'px';
-
-    // Defer listener attach so the current right-click pointerdown doesn't
-    // immediately close us.
-    setTimeout(() => {
-      document.addEventListener('pointerdown', onCtxOutsideDown, true);
-      document.addEventListener('keydown', onCtxKey, true);
-    }, 0);
-  }
+  const openGSMenu = (ev, items) =>
+    openContextMenu(ev, items, { className: 'global-strip-ctx-menu' });
 
   function afterMutation(path) {
     store.emit('change', { path, value: store.data[path] });
@@ -231,7 +189,7 @@ export function initGlobalStrip({ store, engine }) {
       e.preventDefault();
       e.stopPropagation();
       if (storeIdx == null) return; // legacy markers can't persist
-      openContextMenu(e, [
+      openGSMenu(e, [
         { label: 'Rename', onClick: () => renameMarkerFlow(storeIdx) },
         { label: 'Delete', variant: 'destructive', onClick: () => deleteMarkerFlow(storeIdx) },
       ]);
@@ -389,7 +347,7 @@ export function initGlobalStrip({ store, engine }) {
         e.stopPropagation();
         // Dataset may drift if array is re-sorted; re-resolve idx by DOM pos.
         const storeIdx = Number(el.dataset.storeIdx);
-        openContextMenu(e, [
+        openGSMenu(e, [
           { label: 'Change BPM', onClick: () => changeTempoBpmFlow(storeIdx) },
           { label: 'Delete', variant: 'destructive', onClick: () => deleteTempoFlow(storeIdx) },
         ]);

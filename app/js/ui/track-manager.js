@@ -1,4 +1,4 @@
-// Phase 3c · track row +/×/right-click menu. Owner: phase-3c agent.
+// Track row +/×/right-click menu.
 //
 // Responsibilities:
 //   - Append a persistent "+ Add track" row at the bottom of the
@@ -6,12 +6,8 @@
 //     that might dislodge it (we watch via MutationObserver).
 //   - Inject a hover-visible delete "×" per `.track-row` (not the add row).
 //   - Right-click context menu: Rename / Duplicate / Delete.
-//
-// Coexists with arrangement.js's renderTrackRows(), which renames rows
-// but doesn't add/remove DOM nodes (the HTML currently hardcodes 10
-// `.track-row` elements). That means we don't need to recreate rows
-// on every tracks change — but we DO re-inject delete buttons in case
-// a future render wipes them, and re-append the add-row.
+
+import { openContextMenu } from './context-menu.js';
 
 const TRACK_COLORS = ['amber', 'red', 'zinc', 'emerald', 'cyan', 'blue', 'violet'];
 
@@ -66,28 +62,8 @@ export function initTrackManager({ store } = {}) {
     });
   }
 
-  // ── Right-click context menu
-  let openMenu = null;
-  function closeMenu() {
-    if (openMenu) { openMenu.remove(); openMenu = null; }
-    document.removeEventListener('pointerdown', onOutsideDown, true);
-    document.removeEventListener('keydown', onMenuKey, true);
-  }
-  function onOutsideDown(e) {
-    if (openMenu && !openMenu.contains(e.target)) closeMenu();
-  }
-  function onMenuKey(e) {
-    if (e.key === 'Escape') closeMenu();
-  }
-
-  function openContextMenu(e, index) {
-    closeMenu();
-    const ul = document.createElement('ul');
-    ul.className = 'track-menu';
-    ul.style.left = e.clientX + 'px';
-    ul.style.top  = e.clientY + 'px';
-
-    const items = [
+  function openTrackMenu(e, index) {
+    openContextMenu(e, [
       { label: 'Rename', onClick: () => {
         const t = store.data.tracks[index];
         if (!t) return;
@@ -104,32 +80,7 @@ export function initTrackManager({ store } = {}) {
         if (!window.confirm('Delete track?')) return;
         store.removeTrack(index);
       }},
-    ];
-
-    items.forEach((it) => {
-      const li = document.createElement('li');
-      li.textContent = it.label;
-      if (it.variant) li.setAttribute('data-variant', it.variant);
-      li.addEventListener('click', () => {
-        try { it.onClick(); } finally { closeMenu(); }
-      });
-      ul.appendChild(li);
-    });
-
-    document.body.appendChild(ul);
-    openMenu = ul;
-
-    // Clamp menu to viewport after attach.
-    const r = ul.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    if (r.right > vw)  ul.style.left = Math.max(0, vw - r.width - 4) + 'px';
-    if (r.bottom > vh) ul.style.top  = Math.max(0, vh - r.height - 4) + 'px';
-
-    // Defer to next tick so the current right-click pointerdown doesn't close us.
-    setTimeout(() => {
-      document.addEventListener('pointerdown', onOutsideDown, true);
-      document.addEventListener('keydown', onMenuKey, true);
-    }, 0);
+    ], { className: 'track-menu' });
   }
 
   trackList.addEventListener('contextmenu', (e) => {
@@ -140,7 +91,7 @@ export function initTrackManager({ store } = {}) {
     const index = rows.indexOf(row);
     if (index < 0) return;
     e.preventDefault();
-    openContextMenu(e, index);
+    openTrackMenu(e, index);
   });
 
   // ── Sync on state/DOM changes

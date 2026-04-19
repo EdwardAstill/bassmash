@@ -1,6 +1,6 @@
-// Phase 1c · Audio scheduler — bridges engine 'beat' events to sampler + mixer
-// Owner: phase-1c agent. Phase 3b extends this to also trigger audio-type
-// clips (full-file playback routed via the shared audio-cache).
+// Audio scheduler — bridges engine 'beat' events to sampler + mixer. Triggers
+// pattern clips and audio clips (full-file playback via audio-cache), and
+// schedules per-track automation ramps.
 //
 // Responsibilities:
 //   · listen for engine 'beat' events and fire sampler triggers for any
@@ -15,6 +15,7 @@
 import { api } from '../api.js';
 import { audioCache } from './audio-cache.js';
 import { bpmAtBeat } from './tempo.js';
+import { clampAutomationValue } from './automation-util.js';
 
 export function initScheduler({ store, sampler, mixer, engine }) {
   const _activeAudioSources = [];
@@ -162,17 +163,13 @@ export function initScheduler({ store, sampler, mixer, engine }) {
           const nextVal = interpolateAutomation(autoPts, nextBeat);
           if (curVal == null || nextVal == null) continue;
           captureBaseline(t, paramKey, channel, param);
-          // Pan lives in [-1, 1]. EQ bands are signed dB. Everything else
-          // is non-negative. Clamp to each AudioParam's safe range.
-          const clamp = paramKey === 'pan'
-            ? (v) => Math.max(-1, Math.min(1, v))
-            : (paramKey === 'fxEqLow' || paramKey === 'fxEqMid' || paramKey === 'fxEqHigh')
-              ? (v) => Math.max(-24, Math.min(24, v))
-              : (v) => Math.max(0, v);
           try {
             param.cancelScheduledValues(time);
-            param.setValueAtTime(clamp(curVal), time);
-            param.linearRampToValueAtTime(clamp(nextVal), time + secondsPerStep);
+            param.setValueAtTime(clampAutomationValue(paramKey, curVal), time);
+            param.linearRampToValueAtTime(
+              clampAutomationValue(paramKey, nextVal),
+              time + secondsPerStep,
+            );
           } catch (err) {
             console.warn('[scheduler] automation schedule failed', { t, paramKey, err });
           }

@@ -5,11 +5,12 @@
 // analyser meters, strip selection, insert/send slot toggles, track colors.
 import { store } from '../../state.js';
 import { BUS_COUNT } from '../../audio/mixer.js';
+import { attachKnobDrag, knobAngle } from '../knob.js';
 
 const UNITY_PCT = 70;
 const TRACK_COLORS = ['amber', 'red', 'zinc', 'emerald', 'cyan', 'blue', 'violet'];
 
-// Knob drag feel — vertical px for full min→max sweep. Matches inspector.
+// Bus FX knob feel — vertical px for full min→max sweep.
 const KNOB_DRAG_PX = 160;
 
 // Per-bus FX knob schema. Each entry describes one knob rendered on that
@@ -66,12 +67,6 @@ function injectStyle() {
 }
 
 function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
-// Map 0..1 (normalised) to -135..+135 rotation, matching inspector knobs.
-function knobAngle(value, min, max) {
-  const span = (max - min) || 1;
-  const pct = clamp((value - min) / span, 0, 1);
-  return -135 + pct * 270;
-}
 
 // -------- gain <-> fader-percent mapping -----------------------------
 function pctToGain(pct) {
@@ -419,11 +414,9 @@ export function initMixer(ctx) {
     const list = [];
     for (let b = 0; b < BUS_COUNT; b++) list.push(mixer.hasSend(trackIdx, b));
     track.sends = list;
-    // Persist via autosave but do NOT emit `change:tracks` — that would
-    // trigger syncChannels → rebuildTrackStrips and wipe our DOM mid-click.
-    // The undo module snapshots on its own timers.
+    // Avoid `change:tracks` — that would trigger syncChannels and wipe our
+    // DOM mid-click. Autosave alone is enough; undo snapshots on its own timers.
     store._scheduleSave?.();
-    store.emit('trackSendsChanged', { trackIdx, sends: list });
   }
   function restoreSendsFromStore() {
     const tracks = store.data.tracks || [];
@@ -601,47 +594,20 @@ export function initMixer(ctx) {
   }
 
   function attachBusKnobDrag(knobEl, busIdx, spec, knob) {
-    let active = false;
-    let dragY = 0;
-    let dragStart = 0;
-
-    function apply(v) {
-      const clamped = clamp(v, knob.min, knob.max);
-      writeBusMix(spec, knob, clamped);
-      mixer.setBusFx(busIdx, knob.param, clamped);
-      knobEl.style.transform = `rotate(${knobAngle(clamped, knob.min, knob.max).toFixed(1)}deg)`;
-      knobEl.title = `${knob.label}: ${clamped.toFixed(2)}`;
-    }
-    function onMove(e) {
-      if (!active) return;
-      const dy = dragY - e.clientY;
-      const range = knob.max - knob.min;
-      apply(dragStart + (dy / KNOB_DRAG_PX) * range);
-    }
-    function onUp() {
-      if (!active) return;
-      active = false;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-    }
-    knobEl.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation(); // don't trigger strip selection
-      active = true;
-      dragY = e.clientY;
-      dragStart = readBusMix(spec, knob);
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
-    });
-    // Swallow the bubbling click so the strip-click selection handler
-    // doesn't re-select the bus strip on every knob-twist.
-    knobEl.addEventListener('click', (e) => e.stopPropagation());
-    knobEl.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      apply(knob.reset);
+    const paint = (v) => {
+      knobEl.style.transform = `rotate(${knobAngle(v, knob.min, knob.max).toFixed(1)}deg)`;
+      knobEl.title = `${knob.label}: ${v.toFixed(2)}`;
+    };
+    attachKnobDrag(knobEl, {
+      min: knob.min, max: knob.max, reset: knob.reset,
+      dragPx: KNOB_DRAG_PX,
+      stopPropagation: true,
+      getValue: () => readBusMix(spec, knob),
+      setValue: (v) => {
+        writeBusMix(spec, knob, v);
+        mixer.setBusFx(busIdx, knob.param, v);
+      },
+      render: paint,
     });
   }
 

@@ -15,8 +15,8 @@ import { store } from '../../state.js';
 import { api } from '../../api.js';
 import { sampler } from '../../audio/sampler.js';
 import { engine } from '../../audio/engine.js';
+import { attachKnobDrag, knobAngle } from '../knob.js';
 
-const DRAG_PX = 200;
 const GAIN_MIN = 0;
 const GAIN_MAX = 2;
 const GAIN_DEFAULT = 1;
@@ -63,9 +63,7 @@ function resolveSelection(selection) {
   return { clip, pattern, patternIndex: clip.patternIndex };
 }
 
-// Styles live in app/css/style.css under the `/* === Sampler tab === */`
-// block — kept out of JS so edits don't duplicate across hot reloads and
-// to avoid git merge conflicts with parallel workbench agents.
+// Styles live in app/css/style.css under `/* === Sampler tab === */`.
 
 // ── picker popover ───────────────────────────────────────────────
 let _openPicker = null;
@@ -146,12 +144,17 @@ export function initSamplerPanel({ rootEl }) {
   let audioFiles = [];
 
   // background fetch of sample lists for the picker
-  api.listKit().then((list) => { kitFiles = Array.isArray(list) ? list : []; }).catch(() => {});
+  api.listKit()
+    .then((list) => { kitFiles = Array.isArray(list) ? list : []; })
+    .catch((err) => console.warn('[sampler-panel] listKit failed', err));
   function refreshAudioList() {
     if (!store.projectName) return;
     api.listAudio(store.projectName).then((list) => {
       audioFiles = Array.isArray(list) ? list : [];
-    }).catch(() => { audioFiles = []; });
+    }).catch((err) => {
+      audioFiles = [];
+      console.warn('[sampler-panel] listAudio failed', err);
+    });
   }
   refreshAudioList();
   store.on('loaded', refreshAudioList);
@@ -178,45 +181,8 @@ export function initSamplerPanel({ rootEl }) {
     }).catch((e) => console.warn('[sampler-panel] audition failed', row.sampleRef, e));
   }
 
-  function knobAngle(value, min, max) {
-    const t = (clamp(value, min, max) - min) / (max - min);
-    return -135 + t * 270;
-  }
-
-  function attachKnobDrag(knobEl, { getValue, setValue, min, max, reset, render }) {
-    let active = false, dragY = 0, dragStart = 0;
-    function onMove(e) {
-      if (!active) return;
-      const dy = dragY - e.clientY;
-      const range = max - min;
-      const v = clamp(dragStart + (dy / DRAG_PX) * range, min, max);
-      setValue(v);
-      render(v);
-    }
-    function onUp() {
-      if (!active) return;
-      active = false;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      commit();
-    }
-    knobEl.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      active = true;
-      dragY = e.clientY;
-      dragStart = getValue();
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
-    });
-    knobEl.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      setValue(reset);
-      render(reset);
-      commit();
-    });
+  function attachKnobWithCommit(el, opts) {
+    attachKnobDrag(el, { ...opts, onDragEnd: commit, stopPropagation: true });
   }
 
   function render() {
@@ -318,7 +284,7 @@ export function initSamplerPanel({ rootEl }) {
       gGroup.appendChild(gLabel);
       gGroup.appendChild(gVal);
       knobs.appendChild(gGroup);
-      attachKnobDrag(gKnob, {
+      attachKnobWithCommit(gKnob, {
         min: GAIN_MIN, max: GAIN_MAX, reset: GAIN_DEFAULT,
         getValue: () => row.gain == null ? GAIN_DEFAULT : Number(row.gain),
         setValue: (v) => { row.gain = v; },
@@ -344,7 +310,7 @@ export function initSamplerPanel({ rootEl }) {
       pGroup.appendChild(pLabel);
       pGroup.appendChild(pVal);
       knobs.appendChild(pGroup);
-      attachKnobDrag(pKnob, {
+      attachKnobWithCommit(pKnob, {
         min: PITCH_MIN, max: PITCH_MAX, reset: PITCH_DEFAULT,
         getValue: () => row.pitch == null ? PITCH_DEFAULT : Number(row.pitch),
         setValue: (v) => { row.pitch = Math.round(v); },

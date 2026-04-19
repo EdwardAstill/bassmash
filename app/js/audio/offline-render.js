@@ -20,6 +20,7 @@ import { mixer as liveMixer } from './mixer.js';
 import { store } from '../state.js';
 import { api } from '../api.js';
 import { bpmAtBeat } from './tempo.js';
+import { clampAutomationValue } from './automation-util.js';
 
 const REVERB_TAIL_SECONDS = 2.5;
 
@@ -290,11 +291,7 @@ function scheduleArrangement(offCtx, channels, sampleBuffers, audioBuffers, send
       const param = getOfflineAutomationParam(channels, sendGainsByTrack, t, paramKey);
       if (!param) continue;
 
-      const clampV = paramKey === 'pan'
-        ? (v) => Math.max(-1, Math.min(1, v))
-        : (paramKey === 'fxEqLow' || paramKey === 'fxEqMid' || paramKey === 'fxEqHigh')
-          ? (v) => Math.max(-24, Math.min(24, v))
-          : (v) => Math.max(0, v);
+      const clampV = (v) => clampAutomationValue(paramKey, v);
 
       for (let beat = 0; beat < maxEndSteps; beat++) {
         const time = stepTime(beat);
@@ -519,8 +516,7 @@ export async function renderArrangementToWav(onProgress = () => {}) {
       if (!bus) continue;
       // channel.sendTap -> sendGain -> bus.input, matching the live graph.
       const g = offCtx.createGain();
-      const liveSendGain =
-        liveMixer._sends?.[t]?.get?.(b)?.gain?.value ?? (enabled ? 1.0 : 0.0);
+      const liveSendGain = liveMixer.getSendGain?.(t, b) ?? (enabled ? 1.0 : 0.0);
       g.gain.value = liveSendGain;
       try {
         srcCh.sendTap.connect(g);

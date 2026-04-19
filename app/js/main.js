@@ -1,15 +1,16 @@
-// Bassmash — boot entry (phase 0)
+// Bassmash — boot entry.
 // Responsibilities:
 //   1. Load or create a project via the FastAPI backend
 //   2. Initialize AudioContext on first user gesture (browser autoplay policy)
 //   3. Wire each zone via its initZone() module
-//   4. Expose a render tick for playhead / meters (stubbed for phase 0)
+//   4. Expose a render tick for playhead / meters
 
 import { store } from './state.js';
 import { api }   from './api.js';
 import { engine }  from './audio/engine.js';
 import { mixer }   from './audio/mixer.js';
 import { sampler } from './audio/sampler.js';
+import { audioCache } from './audio/audio-cache.js';
 
 import { initHeader }    from './ui/zones/header.js';
 import { initToolbar }   from './ui/zones/toolbar.js';
@@ -127,6 +128,15 @@ async function boot() {
 
   // Scheduler needs AudioContext — wire after engineReady
   store.on('engineReady', () => initScheduler(ctx));
+
+  // Evict stale decoded buffers when a different project loads.
+  let prevProjectName = null;
+  store.on('loaded', () => {
+    if (prevProjectName !== null && prevProjectName !== store.projectName) {
+      audioCache.clear();
+    }
+    prevProjectName = store.projectName;
+  });
 
   const unlock = () => { ensureAudio().catch(console.error); };
   document.addEventListener('pointerdown', unlock, { once: true, capture: true });

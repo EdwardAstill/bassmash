@@ -1,4 +1,4 @@
-// Phase 3c · snapshot-based undo/redo. Owner: phase-3c agent.
+// Snapshot-based undo/redo.
 //
 // Architecture:
 //   - Listen to store.emit('change') and debounce 250ms, then push a

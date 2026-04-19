@@ -1,11 +1,10 @@
-// Zone 4 · Inspector — phase 2a
-// Reacts to store.on('trackSelected') by rendering the selected track's
-// channel state (name, gain, pan, width, FX chain, bus sends).
+// Zone 4 · Inspector. Reacts to store.on('trackSelected') by rendering the
+// selected track's channel state (name, gain, pan, width, FX chain, bus sends).
 import { store } from '../../state.js';
 import { BUS_COUNT } from '../../audio/mixer.js';
+import { attachKnobDrag } from '../knob.js';
 
 const UNITY_PCT = 70;
-const DRAG_PX = 200;
 const FX_NAMES = ['EQ', 'Distortion', 'Delay', 'Reverb'];
 const FX_KEYS  = ['eq', 'distortion', 'delay', 'reverb'];
 
@@ -365,9 +364,7 @@ export function initInspector(ctx) {
       const list = [];
       for (let b = 0; b < BUS_COUNT; b++) list.push(mixer.hasSend(trackIdx, b));
       track.sends = list;
-      // Mirrors mixer zone: autosave only, avoid re-triggering a tracks-rebuild.
       store._scheduleSave?.();
-      store.emit('trackSendsChanged', { trackIdx, sends: list });
     }
     statusEl.textContent = nowOn ? 'ON' : 'OFF';
     statusEl.classList.toggle('fx-chain__status--on',  nowOn);
@@ -402,50 +399,7 @@ export function initInspector(ctx) {
     statusEl.classList.toggle('fx-chain__status--off', !newEnabled);
   }
 
-  // -------- vertical drag helper ----------
-  function attachDrag(knob, opts) {
-    if (!knob) return;
-    const {
-      getValue, setValue, min, max, reset,
-      render: afterRender, onDragStart, onDragEnd,
-    } = opts;
-    let dragY = 0;
-    let dragStart = 0;
-    let active = false;
-
-    function onMove(e) {
-      if (!active) return;
-      const dy = dragY - e.clientY;            // up = positive
-      const range = max - min;
-      const delta = (dy / DRAG_PX) * range;
-      const v = clamp(dragStart + delta, min, max);
-      setValue(v);
-      if (afterRender) afterRender(v);
-    }
-    function onUp() {
-      if (!active) return;
-      active = false;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      if (onDragEnd) onDragEnd();
-    }
-    knob.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      active = true;
-      dragY = e.clientY;
-      dragStart = getValue();
-      if (onDragStart) onDragStart();
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
-    });
-    knob.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      setValue(reset);
-      if (afterRender) afterRender(reset);
-    });
-  }
+  const attachDrag = attachKnobDrag;
 
   // During playback we mirror the live channel.gain.gain.value onto the
   // inspector volume knob. While the user is actively dragging the knob
