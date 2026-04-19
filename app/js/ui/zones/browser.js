@@ -18,6 +18,7 @@ import { api } from '../../api.js';
 import { sampler } from '../../audio/sampler.js';
 import { engine } from '../../audio/engine.js';
 import { audioCache } from '../../audio/audio-cache.js';
+import { prompt as modalPrompt, confirm as modalConfirm } from '../modal.js';
 
 // ──────────────────────────────────────────────────────────────────
 // One-time CSS (scoped)
@@ -289,33 +290,61 @@ export function initBrowser(/* { store, api, engine, mixer, sampler, ensureAudio
 
   async function handleRename(filename, rowEl) {
     if (!store.projectName) return;
-    const suggestion = filename;
-    const next = window.prompt(`Rename "${filename}" to:`, suggestion);
-    if (next == null) return;
-    const trimmed = next.trim();
-    if (!trimmed || trimmed === filename) return;
-    try {
-      const updated = await api.renameAudio(store.projectName, filename, trimmed);
-      // Evict the stale decoded buffer under the old URL so later plays
-      // don't re-hit a dead fetch / serve outdated audio for a reused name.
+    // Loop so that inline validation errors (empty / unchanged / invalid name)
+    // keep the modal open. Backend errors (409 conflict, 400 invalid) bubble
+    // as exceptions → re-open the modal pre-filled so the user can adjust.
+    let defaultValue = filename;
+    let backendError = '';
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const next = await modalPrompt({
+        title: 'Rename file',
+        message: backendError || `Rename "${filename}" to:`,
+        defaultValue,
+        placeholder: 'filename.wav',
+        confirmLabel: 'Rename',
+        validate: (value) => {
+          const v = (value || '').trim();
+          if (!v) return 'Filename is required.';
+          if (v === filename) return 'Enter a different name.';
+          return '';
+        },
+      });
+      if (next == null) return;
+      const trimmed = next.trim();
       try {
-        audioCache.clear(api.audioUrl(store.projectName, filename));
-      } catch (_) { /* non-fatal */ }
-      // Refresh list + notify mirrors (scheduler, workbench).
-      audioFiles = await api.listAudio(store.projectName);
-      store.audioFiles = audioFiles;
-      store.emit('audioFilesChanged');
-      render();
-      console.info('[browser] renamed', filename, '->', updated);
-    } catch (err) {
-      console.warn('[browser] renameAudio failed', err);
-      showRowError(rowEl, err?.message || 'Rename failed');
+        const updated = await api.renameAudio(store.projectName, filename, trimmed);
+        // Evict the stale decoded buffer under the old URL so later plays
+        // don't re-hit a dead fetch / serve outdated audio for a reused name.
+        try {
+          audioCache.clear(api.audioUrl(store.projectName, filename));
+        } catch (_) { /* non-fatal */ }
+        // Refresh list + notify mirrors (scheduler, workbench).
+        audioFiles = await api.listAudio(store.projectName);
+        store.audioFiles = audioFiles;
+        store.emit('audioFilesChanged');
+        render();
+        console.info('[browser] renamed', filename, '->', updated);
+        return;
+      } catch (err) {
+        console.warn('[browser] renameAudio failed', err);
+        // Re-open the prompt pre-filled with the user's attempt so they can
+        // fix a typo or conflict without retyping.
+        defaultValue = trimmed;
+        backendError = err?.message || 'Rename failed';
+        showRowError(rowEl, backendError);
+      }
     }
   }
 
   async function handleDelete(filename, rowEl) {
     if (!store.projectName) return;
-    const ok = window.confirm(`Delete "${filename}"? This removes the file from disk.`);
+    const ok = await modalConfirm({
+      title: 'Delete file',
+      message: `Delete "${filename}"? This removes the file from disk.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
     if (!ok) return;
     try {
       await api.deleteAudio(store.projectName, filename);

@@ -100,6 +100,12 @@ export function initClipInteractions({ store } = {}) {
     const arrIdx = findArrIndex(clipEl);
     selectedArrIdx = arrIdx >= 0 ? arrIdx : null;
     const trackIndex = laneIndexOf(clipEl);
+    // Also focus the owning track so the inspector reflects it.
+    // Mirror mixer-strip pattern: set store field AND emit event.
+    if (trackIndex >= 0 && store.selectedTrack !== trackIndex) {
+      store.selectedTrack = trackIndex;
+      store.emit('trackSelected', trackIndex);
+    }
     store.emit('clipSelected', { trackIndex, arrangementIdx: selectedArrIdx });
   }
 

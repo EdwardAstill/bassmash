@@ -22,18 +22,48 @@ export function initScheduler({ store, sampler, mixer, engine }) {
   // the console on every 16th-note tick while a decode is in flight.
   const _warnedAudioRefs = new Set();
 
-  // ── Automation (P2 #5) ────────────────────────────────────────────
-  // Per-track volume breakpoints live on `track.automation.volume` as
-  // { beat, value } entries (beat = quarter notes). We interpolate
-  // linearly between points and drive the mixer channel's gain via
-  // setValueAtTime + linearRampToValueAtTime at each 16th-note tick.
+  // ── Automation (P2 #5, extended) ──────────────────────────────────
+  // Per-track breakpoints live on `track.automation[paramKey]` as
+  // { beat, value } entries (beat = quarter notes). Supported keys:
+  //   volume, pan, sendA, sendB, fxReverb, fxDelay,
+  //   fxEqLow, fxEqMid, fxEqHigh
+  //
+  // We interpolate linearly between points and drive the resolved
+  // AudioParam via setValueAtTime + linearRampToValueAtTime at each
+  // 16th-note tick. The mixer's getAutomationParam() hides the param
+  // lookup — if the target doesn't exist (e.g. a send that's not wired
+  // yet) we skip silently.
   //
   // Strategy: on every `beat` event, schedule a short ramp from the
   // interpolated value at the current step to the value one 16th-note
   // later. This keeps us reading only a local window and is immune to
   // looping + on-the-fly edits. On transport:stop we cancel scheduled
-  // values so the mixer strip fader isn't left stuck.
-  const _baselineGain = new Map();       // trackIndex -> pre-automation gain
+  // values so the automated params don't get left stuck at their last
+  // breakpoint.
+  const AUTOMATION_KEYS = [
+    'volume', 'pan', 'sendA', 'sendB',
+    'fxReverb', 'fxDelay', 'fxEqLow', 'fxEqMid', 'fxEqHigh',
+  ];
+  // Baseline registry keyed by `${trackIdx}:${paramKey}` so we can
+  // restore each automated param to its pre-automation value on stop.
+  // For volume we prefer `channel._preMuteGain` (which mixer keeps
+  // authoritative through mute/solo); other params just snapshot the
+  // AudioParam's current value the first time we touch them.
+  const _baselineByTarget = new Map();
+
+  function baselineKey(trackIdx, paramKey) { return `${trackIdx}:${paramKey}`; }
+
+  function captureBaseline(trackIdx, paramKey, channel, param) {
+    const k = baselineKey(trackIdx, paramKey);
+    if (_baselineByTarget.has(k)) return;
+    let v = 0;
+    if (paramKey === 'volume') {
+      v = channel?._preMuteGain ?? param.value ?? 1;
+    } else {
+      v = param.value ?? 0;
+    }
+    _baselineByTarget.set(k, v);
+  }
 
   function interpolateAutomation(points, beat) {
     if (!Array.isArray(points) || points.length === 0) return null;
@@ -115,30 +145,36 @@ export function initScheduler({ store, sampler, mixer, engine }) {
       const channel = mixer.channels[t];
       if (!channel) continue;
 
-      // Automation — schedule a 16th-note ramp on this channel's gain
-      // param every tick. Reading only the current + next step's value
-      // keeps this O(points) per tick without planning the full arrangement.
-      const autoPts = track.automation?.volume;
-      if (Array.isArray(autoPts) && autoPts.length > 0 && channel.gain) {
+      // Automation — schedule a 16th-note ramp on every automated
+      // AudioParam every tick. Reading only the current + next step's
+      // value keeps this O(points) per tick without planning the full
+      // arrangement ahead of time.
+      const automation = track.automation;
+      if (automation && typeof automation === 'object') {
         const curBeat = beat / 4;                      // step -> quarter notes
         const nextBeat = (beat + 1) / 4;
-        const curVal = interpolateAutomation(autoPts, curBeat);
-        const nextVal = interpolateAutomation(autoPts, nextBeat);
-        if (curVal != null && nextVal != null) {
-          // Remember the pre-automation gain once so we can restore it
-          // on transport stop.
-          if (!_baselineGain.has(t)) {
-            _baselineGain.set(t, channel._preMuteGain ?? channel.gain.gain.value ?? 1);
-          }
+        for (const paramKey of AUTOMATION_KEYS) {
+          const autoPts = automation[paramKey];
+          if (!Array.isArray(autoPts) || autoPts.length === 0) continue;
+          const param = mixer.getAutomationParam(t, paramKey);
+          if (!param) continue;       // missing target (e.g. send not wired) — skip silently
+          const curVal = interpolateAutomation(autoPts, curBeat);
+          const nextVal = interpolateAutomation(autoPts, nextBeat);
+          if (curVal == null || nextVal == null) continue;
+          captureBaseline(t, paramKey, channel, param);
+          // Pan lives in [-1, 1]. EQ bands are signed dB. Everything else
+          // is non-negative. Clamp to each AudioParam's safe range.
+          const clamp = paramKey === 'pan'
+            ? (v) => Math.max(-1, Math.min(1, v))
+            : (paramKey === 'fxEqLow' || paramKey === 'fxEqMid' || paramKey === 'fxEqHigh')
+              ? (v) => Math.max(-24, Math.min(24, v))
+              : (v) => Math.max(0, v);
           try {
-            channel.gain.gain.cancelScheduledValues(time);
-            channel.gain.gain.setValueAtTime(Math.max(0, curVal), time);
-            channel.gain.gain.linearRampToValueAtTime(
-              Math.max(0, nextVal),
-              time + secondsPerStep,
-            );
+            param.cancelScheduledValues(time);
+            param.setValueAtTime(clamp(curVal), time);
+            param.linearRampToValueAtTime(clamp(nextVal), time + secondsPerStep);
           } catch (err) {
-            console.warn('[scheduler] automation schedule failed', err);
+            console.warn('[scheduler] automation schedule failed', { t, paramKey, err });
           }
         }
       }
@@ -258,17 +294,24 @@ export function initScheduler({ store, sampler, mixer, engine }) {
     }
     _activeAudioSources.length = 0;
 
-    // Restore any automated channels to their pre-automation gain so the
-    // mixer fader doesn't look stuck at the last breakpoint value.
+    // Restore every automated param to its pre-automation value so the
+    // mixer / send / fx UIs don't look stuck at the last breakpoint.
     const now = engine?.ctx?.currentTime ?? 0;
-    for (const [t, baseline] of _baselineGain) {
+    for (const [key, baseline] of _baselineByTarget) {
+      const [tStr, paramKey] = key.split(':');
+      const t = Number(tStr);
       const ch = mixer.channels[t];
-      if (!ch?.gain) continue;
+      const param = mixer.getAutomationParam(t, paramKey);
+      if (!param) continue;
       try {
-        ch.gain.gain.cancelScheduledValues(now);
-        ch.gain.gain.setValueAtTime(ch.muted ? 0 : baseline, now);
+        param.cancelScheduledValues(now);
+        // Keep mute semantics for volume: if the channel is muted,
+        // pin to 0 rather than the baseline gain so the mixer strip
+        // stays silent when transport stops mid-automation.
+        const restore = (paramKey === 'volume' && ch?.muted) ? 0 : baseline;
+        param.setValueAtTime(restore, now);
       } catch (_) { /* best-effort */ }
     }
-    _baselineGain.clear();
+    _baselineByTarget.clear();
   });
 }

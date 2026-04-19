@@ -9,6 +9,27 @@ import { BUS_COUNT } from '../../audio/mixer.js';
 const UNITY_PCT = 70;
 const TRACK_COLORS = ['amber', 'red', 'zinc', 'emerald', 'cyan', 'blue', 'violet'];
 
+// Knob drag feel — vertical px for full min→max sweep. Matches inspector.
+const KNOB_DRAG_PX = 160;
+
+// Per-bus FX knob schema. Each entry describes one knob rendered on that
+// bus strip. `param` is the paramKey passed to mixer.setBusFx / getBusFx.
+// `persistKey` is the field inside store.data.busMix[busKey].
+const BUS_FX_SPEC = [
+  // Bus A · Reverb
+  { busKey: 'busA', knobs: [
+    { label: 'Rev', param: 'reverb', persistKey: 'reverb', min: 0, max: 1, reset: 1 },
+  ] },
+  // Bus B · Delay
+  { busKey: 'busB', knobs: [
+    { label: 'Dly', param: 'delay',  persistKey: 'delay',  min: 0, max: 1, reset: 0.5 },
+  ] },
+];
+const BUS_MIX_DEFAULTS = {
+  busA: { reverb: 1.0 },
+  busB: { delay: 0.5 },
+};
+
 // -------- style injection (data-active for .mr-btn, etc.) ------------
 let _styleInjected = false;
 function injectStyle() {
@@ -42,6 +63,14 @@ function injectStyle() {
     }
   `;
   document.head.appendChild(el);
+}
+
+function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+// Map 0..1 (normalised) to -135..+135 rotation, matching inspector knobs.
+function knobAngle(value, min, max) {
+  const span = (max - min) || 1;
+  const pct = clamp((value - min) / span, 0, 1);
+  return -135 + pct * 270;
 }
 
 // -------- gain <-> fader-percent mapping -----------------------------
@@ -457,6 +486,11 @@ export function initMixer(ctx) {
     buses = mixer.buses;
     if (!masterAdapter) masterAdapter = buildMasterAdapter();
 
+    // Now that buses exist, push saved bus-FX wet values back into the
+    // audio graph and (re)render the strip knobs to match.
+    restoreBusMixToMixer();
+    renderBusFxKnobs();
+
     // Replay persisted sends from store.data.tracks[i].sends[] so the
     // routing survives project load + track rebuilds. Idempotent — the
     // mixer dedupes duplicate connectSend calls by (src,bus). Repaint
@@ -492,6 +526,136 @@ export function initMixer(ctx) {
   });
   // Reflect send toggles coming from elsewhere (inspector) in the strip slots.
   store.on('sendChanged', () => paintSendSlots());
+
+  // ---- bus FX knobs -------------------------------------------------
+  // Ensure store.data.busMix exists with defaults, then render one knob
+  // per spec entry into each bus strip (injected above the fader so the
+  // strip's grid picks up the new row declared in the Bus FX knobs CSS).
+  function ensureBusMixState() {
+    if (!store.data.busMix) store.data.busMix = {};
+    for (const spec of BUS_FX_SPEC) {
+      const defaults = BUS_MIX_DEFAULTS[spec.busKey] || {};
+      if (!store.data.busMix[spec.busKey]) {
+        store.data.busMix[spec.busKey] = { ...defaults };
+      } else {
+        for (const k of Object.keys(defaults)) {
+          if (!isFinite(Number(store.data.busMix[spec.busKey][k]))) {
+            store.data.busMix[spec.busKey][k] = defaults[k];
+          }
+        }
+      }
+    }
+  }
+  function readBusMix(spec, knob) {
+    const slot = store.data.busMix?.[spec.busKey];
+    const v = slot ? Number(slot[knob.persistKey]) : NaN;
+    return isFinite(v) ? v : knob.reset;
+  }
+  function writeBusMix(spec, knob, value) {
+    ensureBusMixState();
+    store.data.busMix[spec.busKey][knob.persistKey] = value;
+    store._scheduleSave?.();
+  }
+
+  function renderBusFxKnobs() {
+    busStrips.forEach((strip, busIdx) => {
+      const spec = BUS_FX_SPEC[busIdx];
+      if (!spec) return;
+      // Tear down any previous knob block (safe on re-render).
+      strip.querySelector('.channel-strip__busfx')?.remove();
+      const block = document.createElement('div');
+      block.className = 'channel-strip__busfx';
+      for (const knob of spec.knobs) {
+        const g = document.createElement('div');
+        g.className = 'bus-fx__group';
+        const k = document.createElement('span');
+        k.className = 'bus-fx__knob';
+        k.dataset.param = knob.param;
+        const lbl = document.createElement('span');
+        lbl.className = 'bus-fx__label';
+        lbl.textContent = knob.label;
+        g.appendChild(k);
+        g.appendChild(lbl);
+        block.appendChild(g);
+        attachBusKnobDrag(k, busIdx, spec, knob);
+      }
+      // Place between name and fader so the strip's grid picks it up.
+      const fader = strip.querySelector('.channel-strip__fader');
+      if (fader) strip.insertBefore(block, fader);
+      else strip.appendChild(block);
+      paintBusFxKnobs(busIdx);
+    });
+  }
+
+  function paintBusFxKnobs(busIdx) {
+    const strip = busStrips[busIdx];
+    const spec = BUS_FX_SPEC[busIdx];
+    if (!strip || !spec) return;
+    for (const knob of spec.knobs) {
+      const k = strip.querySelector(`.bus-fx__knob[data-param="${knob.param}"]`);
+      if (!k) continue;
+      const v = readBusMix(spec, knob);
+      k.style.transform = `rotate(${knobAngle(v, knob.min, knob.max).toFixed(1)}deg)`;
+      k.title = `${knob.label}: ${v.toFixed(2)}`;
+    }
+  }
+
+  function attachBusKnobDrag(knobEl, busIdx, spec, knob) {
+    let active = false;
+    let dragY = 0;
+    let dragStart = 0;
+
+    function apply(v) {
+      const clamped = clamp(v, knob.min, knob.max);
+      writeBusMix(spec, knob, clamped);
+      mixer.setBusFx(busIdx, knob.param, clamped);
+      knobEl.style.transform = `rotate(${knobAngle(clamped, knob.min, knob.max).toFixed(1)}deg)`;
+      knobEl.title = `${knob.label}: ${clamped.toFixed(2)}`;
+    }
+    function onMove(e) {
+      if (!active) return;
+      const dy = dragY - e.clientY;
+      const range = knob.max - knob.min;
+      apply(dragStart + (dy / KNOB_DRAG_PX) * range);
+    }
+    function onUp() {
+      if (!active) return;
+      active = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    }
+    knobEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // don't trigger strip selection
+      active = true;
+      dragY = e.clientY;
+      dragStart = readBusMix(spec, knob);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    });
+    // Swallow the bubbling click so the strip-click selection handler
+    // doesn't re-select the bus strip on every knob-twist.
+    knobEl.addEventListener('click', (e) => e.stopPropagation());
+    knobEl.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      apply(knob.reset);
+    });
+  }
+
+  // Push any persisted busMix values into the live mixer so the audio
+  // graph matches the saved project on load / engine-ready.
+  function restoreBusMixToMixer() {
+    ensureBusMixState();
+    BUS_FX_SPEC.forEach((spec, busIdx) => {
+      for (const knob of spec.knobs) {
+        const v = readBusMix(spec, knob);
+        mixer.setBusFx(busIdx, knob.param, v);
+      }
+    });
+  }
 
   // Wire static (bus + master) strips once at init.
   staticStrips.forEach(wireStrip);

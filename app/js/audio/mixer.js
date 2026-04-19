@@ -91,6 +91,57 @@ class Mixer {
     return this.buses;
   }
 
+  // ── Bus FX ───────────────────────────────────────────────────────
+  /**
+   * Generalised setter for a bus's effect-chain parameter. Keeps the
+   * UI decoupled from the underlying EffectsChain shape. Supported
+   * paramKeys: 'reverb' (wet 0..1), 'delay' (wet 0..1), 'delayTime'
+   * (seconds), 'delayFeedback' (0..~0.95).
+   * Returns true on success.
+   */
+  setBusFx(busIdx, paramKey, value) {
+    const bus = this.buses[busIdx];
+    if (!bus || !bus.effects) return false;
+    const fx = bus.effects;
+    switch (paramKey) {
+      case 'reverb':
+        if (typeof fx.setReverbMix !== 'function') return false;
+        fx.setReverbMix(value);
+        return true;
+      case 'delay':
+        if (typeof fx.setDelayMix !== 'function') return false;
+        fx.setDelayMix(value);
+        return true;
+      case 'delayTime':
+        if (typeof fx.setDelayTime !== 'function') return false;
+        fx.setDelayTime(value);
+        return true;
+      case 'delayFeedback':
+        if (typeof fx.setDelayFeedback !== 'function') return false;
+        fx.setDelayFeedback(value);
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Read the live value of a bus FX param back from its AudioParam.
+   * Returns null if the bus or param is missing.
+   */
+  getBusFx(busIdx, paramKey) {
+    const bus = this.buses[busIdx];
+    if (!bus || !bus.effects) return null;
+    const fx = bus.effects;
+    switch (paramKey) {
+      case 'reverb':        return fx.reverb?.wet?.gain?.value ?? null;
+      case 'delay':         return fx.delay?.wet?.gain?.value ?? null;
+      case 'delayTime':     return fx.delay?.node?.delayTime?.value ?? null;
+      case 'delayFeedback': return fx.delay?.feedback?.gain?.value ?? null;
+      default:              return null;
+    }
+  }
+
   // ── Sends ────────────────────────────────────────────────────────
   /**
    * Wire a post-fader send from channel `srcIdx` into bus `busIdx` at `gain`.
@@ -166,6 +217,36 @@ class Mixer {
   hasSend(srcIdx, busIdx) {
     const map = this._sends[srcIdx];
     return !!(map && map.get(busIdx));
+  }
+
+  /**
+   * Resolve an AudioParam for a given track + automation key. Shared by
+   * the realtime scheduler and the offline-render path so both agree on
+   * where a given breakpoint lane writes. Returns null when the target
+   * doesn't exist yet (e.g. a send that was never enabled) — callers
+   * should skip scheduling rather than blowing up.
+   *
+   * @param {number} trackIdx
+   * @param {string} paramKey  'volume' | 'pan' | 'sendA' | 'sendB' |
+   *                           'fxReverb' | 'fxDelay' |
+   *                           'fxEqLow' | 'fxEqMid' | 'fxEqHigh'
+   * @returns {AudioParam|null}
+   */
+  getAutomationParam(trackIdx, paramKey) {
+    const ch = this.channels[trackIdx];
+    if (!ch) return null;
+    switch (paramKey) {
+      case 'volume':   return ch.gain?.gain ?? null;
+      case 'pan':      return ch.pan?.pan ?? null;
+      case 'sendA':    return this._sends?.[trackIdx]?.get?.(0)?.gain ?? null;
+      case 'sendB':    return this._sends?.[trackIdx]?.get?.(1)?.gain ?? null;
+      case 'fxReverb': return ch.effects?.reverb?.wet?.gain ?? null;
+      case 'fxDelay':  return ch.effects?.delay?.wet?.gain ?? null;
+      case 'fxEqLow':  return ch.effects?.eq?.low?.gain ?? null;
+      case 'fxEqMid':  return ch.effects?.eq?.mid?.gain ?? null;
+      case 'fxEqHigh': return ch.effects?.eq?.high?.gain ?? null;
+      default:         return null;
+    }
   }
 
   _teardownSendsFor(srcIdx) {

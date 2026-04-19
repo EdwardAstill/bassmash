@@ -114,10 +114,52 @@ function buildOfflineChannel(offCtx, destination, liveChannel, options = {}) {
   // `MixerChannel.sendTap` getter in the live mixer. For buses we never
   // tap, but we return it all the same for structural parity.
   //
-  // Expose `gain` so the offline scheduler can schedule automation ramps
-  // (task: offline parity for volume automation breakpoints).
-  return { input, sendTap: chPan, isBus, gain: chGain, baselineGain: chGain.gain.value };
+  // Expose every node the offline automation loop may want to ramp —
+  // matches the live `mixer.getAutomationParam` taxonomy so the two
+  // renderers stay in lockstep. Per-bus sends live on a sibling map
+  // (built out in `renderArrangementToWav`) rather than here.
+  return {
+    input,
+    sendTap: chPan,
+    isBus,
+    gain: chGain,
+    pan: chPan,
+    baselineGain: chGain.gain.value,
+    effects: {
+      eq: { low: eqLow, mid: eqMid, high: eqHigh },
+      reverb: { wet: reverbWet, dry: reverbDry },
+      delay: { wet: delayWet, dry: delayDry, node: delayNode, feedback: delayFeedback },
+      distortion: { wet: distWet, dry: distDry },
+    },
+  };
 }
+
+// Resolve an AudioParam on the offline graph. Mirrors
+// `mixer.getAutomationParam` for live playback but reads the offline
+// channels + the offline send-gain map (`sendGainsByTrack[t][busIdx]`).
+// Returns null if the target doesn't exist in the offline graph (e.g.
+// a send that wasn't wired).
+function getOfflineAutomationParam(channels, sendGainsByTrack, trackIdx, paramKey) {
+  const ch = channels[trackIdx];
+  if (!ch) return null;
+  switch (paramKey) {
+    case 'volume':   return ch.gain?.gain ?? null;
+    case 'pan':      return ch.pan?.pan ?? null;
+    case 'sendA':    return sendGainsByTrack?.[trackIdx]?.[0]?.gain ?? null;
+    case 'sendB':    return sendGainsByTrack?.[trackIdx]?.[1]?.gain ?? null;
+    case 'fxReverb': return ch.effects?.reverb?.wet?.gain ?? null;
+    case 'fxDelay':  return ch.effects?.delay?.wet?.gain ?? null;
+    case 'fxEqLow':  return ch.effects?.eq?.low?.gain ?? null;
+    case 'fxEqMid':  return ch.effects?.eq?.mid?.gain ?? null;
+    case 'fxEqHigh': return ch.effects?.eq?.high?.gain ?? null;
+    default:         return null;
+  }
+}
+
+const OFFLINE_AUTOMATION_KEYS = [
+  'volume', 'pan', 'sendA', 'sendB',
+  'fxReverb', 'fxDelay', 'fxEqLow', 'fxEqMid', 'fxEqHigh',
+];
 
 // ─── sample fetch/decode for the offline ctx ───────────────────────────
 
@@ -202,7 +244,7 @@ function interpolateAutomation(points, beat) {
   return prev ? prev.value : null;
 }
 
-function scheduleArrangement(offCtx, channels, sampleBuffers, audioBuffers) {
+function scheduleArrangement(offCtx, channels, sampleBuffers, audioBuffers, sendGainsByTrack = []) {
   const tracks      = store.data.tracks      || [];
   const arrangement = store.data.arrangement || [];
   const patterns    = store.data.patterns    || [];
@@ -231,33 +273,43 @@ function scheduleArrangement(offCtx, channels, sampleBuffers, audioBuffers) {
   };
 
   // ── Automation pass ───────────────────────────────────────────────
-  // Replay volume breakpoints on each track's offline channel.gain. Uses
+  // Replay every automated param on each track's offline graph. Uses
   // the same per-16th-note ramp strategy as the live scheduler, but with
   // offline times (starting at t=0) instead of engine.ctx.currentTime.
+  // Missing targets (e.g. a send that was never wired) are skipped so
+  // offline bounces don't throw on sparse data.
   for (let t = 0; t < tracks.length; t++) {
     const track = tracks[t];
     if (!track || track.muted === true) continue;
-    const channel = channels[t];
-    if (!channel || !channel.gain) continue;
-    const autoPts = track.automation?.volume;
-    if (!Array.isArray(autoPts) || autoPts.length === 0) continue;
+    const automation = track.automation;
+    if (!automation || typeof automation !== 'object') continue;
 
-    for (let beat = 0; beat < maxEndSteps; beat++) {
-      const time = stepTime(beat);
-      const curBeat = beat / 4;
-      const nextBeat = (beat + 1) / 4;
-      const curVal = interpolateAutomation(autoPts, curBeat);
-      const nextVal = interpolateAutomation(autoPts, nextBeat);
-      if (curVal == null || nextVal == null) continue;
-      try {
-        channel.gain.gain.setValueAtTime(Math.max(0, curVal), time);
-        channel.gain.gain.linearRampToValueAtTime(
-          Math.max(0, nextVal),
-          stepTime(beat + 1),
-        );
-      } catch (err) {
-        console.warn('[offline-render] automation schedule failed', { t, beat, err });
-        break;
+    for (const paramKey of OFFLINE_AUTOMATION_KEYS) {
+      const autoPts = automation[paramKey];
+      if (!Array.isArray(autoPts) || autoPts.length === 0) continue;
+      const param = getOfflineAutomationParam(channels, sendGainsByTrack, t, paramKey);
+      if (!param) continue;
+
+      const clampV = paramKey === 'pan'
+        ? (v) => Math.max(-1, Math.min(1, v))
+        : (paramKey === 'fxEqLow' || paramKey === 'fxEqMid' || paramKey === 'fxEqHigh')
+          ? (v) => Math.max(-24, Math.min(24, v))
+          : (v) => Math.max(0, v);
+
+      for (let beat = 0; beat < maxEndSteps; beat++) {
+        const time = stepTime(beat);
+        const curBeat = beat / 4;
+        const nextBeat = (beat + 1) / 4;
+        const curVal = interpolateAutomation(autoPts, curBeat);
+        const nextVal = interpolateAutomation(autoPts, nextBeat);
+        if (curVal == null || nextVal == null) continue;
+        try {
+          param.setValueAtTime(clampV(curVal), time);
+          param.linearRampToValueAtTime(clampV(nextVal), stepTime(beat + 1));
+        } catch (err) {
+          console.warn('[offline-render] automation schedule failed', { t, paramKey, beat, err });
+          break;
+        }
       }
     }
   }
@@ -439,7 +491,20 @@ export async function renderArrangementToWav(onProgress = () => {}) {
 
   // Wire post-fader sends per track. Source of truth: live mixer state;
   // fall back to persisted `track.sends[]` if the live mixer hasn't
-  // replayed them yet.
+  // replayed them yet. We also collect the created offline gain nodes
+  // into `sendGainsByTrack[t][busIdx]` so the automation pass can ramp
+  // `sendA` / `sendB` breakpoints against them. If a send isn't wired
+  // but the track has automation for it, we still create a gain node so
+  // the breakpoints take effect during the bounce (matches the live
+  // path once the user enables the send).
+  const sendGainsByTrack = tracks.map(() => []);
+  const hasSendAutomation = (t, b) => {
+    const auto = tracks[t]?.automation;
+    if (!auto) return false;
+    const key = b === 0 ? 'sendA' : b === 1 ? 'sendB' : null;
+    return !!(key && Array.isArray(auto[key]) && auto[key].length > 0);
+  };
+
   for (let t = 0; t < tracks.length; t++) {
     const srcCh = channels[t];
     if (!srcCh) continue;
@@ -448,17 +513,19 @@ export async function renderArrangementToWav(onProgress = () => {}) {
       const enabled = liveMixer.hasSend
         ? liveMixer.hasSend(t, b)
         : !!(storedSends && storedSends[b]);
-      if (!enabled) continue;
+      const needForAutomation = hasSendAutomation(t, b);
+      if (!enabled && !needForAutomation) continue;
       const bus = offlineBuses[b];
       if (!bus) continue;
       // channel.sendTap -> sendGain -> bus.input, matching the live graph.
       const g = offCtx.createGain();
       const liveSendGain =
-        liveMixer._sends?.[t]?.get?.(b)?.gain?.value ?? 1.0;
+        liveMixer._sends?.[t]?.get?.(b)?.gain?.value ?? (enabled ? 1.0 : 0.0);
       g.gain.value = liveSendGain;
       try {
         srcCh.sendTap.connect(g);
         g.connect(bus.input);
+        sendGainsByTrack[t][b] = g;
       } catch (err) {
         console.warn('[offline-render] send wiring failed', { t, b, err });
       }
@@ -493,7 +560,7 @@ export async function renderArrangementToWav(onProgress = () => {}) {
 
   // Lay every buffer-source down ahead of the render.
   onProgress('Scheduling clips…');
-  scheduleArrangement(offCtx, channels, sampleBuffers, audioBuffers);
+  scheduleArrangement(offCtx, channels, sampleBuffers, audioBuffers, sendGainsByTrack);
 
   onProgress('Rendering…');
   const rendered = await offCtx.startRendering();

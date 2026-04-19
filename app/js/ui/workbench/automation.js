@@ -1,44 +1,82 @@
-// Workbench — Automation pane (P2 #5)
-// Per-track breakpoint editor. One automation lane per track, volume
-// parameter only for now. Breakpoints live on:
-//   store.data.tracks[i].automation = { volume: [{beat, value}, ...] }
-// where `value` ∈ [0, 1.5] (linear gain), `beat` in quarter notes.
-// Points are kept sorted by beat; linear interpolation between points.
+// Workbench — Automation pane (P2 #5, extended)
+// Per-track breakpoint editor. Multiple automation lanes per track —
+// volume, pan, sends, FX wet — each stored as its own array on:
+//   store.data.tracks[i].automation = {
+//     volume:    [{beat, value}, ...]   // 0 .. 1.5   (linear gain)
+//     pan:       [{beat, value}, ...]   // -1 .. 1
+//     sendA:     [{beat, value}, ...]   // 0 .. 1.5
+//     sendB:     [{beat, value}, ...]   // 0 .. 1.5
+//     fxReverb:  [{beat, value}, ...]   // 0 .. 1
+//     fxDelay:   [{beat, value}, ...]   // 0 .. 1
+//     fxEqLow:   [{beat, value}, ...]   // -12 .. 12 dB
+//     fxEqMid:   [{beat, value}, ...]   // -12 .. 12 dB
+//     fxEqHigh:  [{beat, value}, ...]   // -12 .. 12 dB
+//   }
+// `beat` is in quarter notes. Points are kept sorted by beat; linear
+// interpolation between points.
 //
 // Selection rule: if a clip is selected we follow its track + beat range;
 // otherwise we use the selected track (store.selectedTrack) and the full
-// arrangement length (or 1 bar fallback). Playback scheduling for these
-// breakpoints lives in `app/js/audio/scheduler.js`.
+// arrangement length (or 1 bar fallback). Playback scheduling lives in
+// `app/js/audio/scheduler.js` — it reads every known param key.
 //
 // UI:
-//   · click empty lane    → add breakpoint at that (beat, value)
-//   · drag breakpoint dot → move (beat + value)
-//   · right-click a dot   → delete
+//   · param selector strip     → choose which AudioParam this lane edits
+//   · click empty lane         → add breakpoint at that (beat, value)
+//   · drag breakpoint dot      → move (beat + value)
+//   · right-click a dot        → delete
 //   · axis labels + guide rail
 //
 // Persist: commit() calls store._scheduleSave(); scheduler + offline
 // render read the data directly.
 import { store } from '../../state.js';
 
-const VALUE_MIN = 0;
-const VALUE_MAX = 1.5;
-const DEFAULT_VALUE = 1.0;
+// ── Param registry ─────────────────────────────────────────────────
+// Single source of truth for UI labels, value ranges, and defaults.
+// Scheduler / offline-render iterate the same keys via their own
+// `getAutomationTarget` helper so new entries here light up audio too.
+export const AUTOMATION_PARAMS = [
+  { key: 'volume',   label: 'Volume',      short: 'Vol',     min: 0,   max: 1.5,  unity: 1.0,  default: 1.0,  unit: '' },
+  { key: 'pan',      label: 'Pan',         short: 'Pan',     min: -1,  max: 1,    unity: 0.0,  default: 0.0,  unit: '' },
+  { key: 'sendA',    label: 'Send A',      short: 'SndA',    min: 0,   max: 1.5,  unity: 1.0,  default: 0.0,  unit: '' },
+  { key: 'sendB',    label: 'Send B',      short: 'SndB',    min: 0,   max: 1.5,  unity: 1.0,  default: 0.0,  unit: '' },
+  { key: 'fxReverb', label: 'FX · Reverb', short: 'Rvb',     min: 0,   max: 1,    unity: 0.5,  default: 0.0,  unit: '' },
+  { key: 'fxDelay',  label: 'FX · Delay',  short: 'Dly',     min: 0,   max: 1,    unity: 0.5,  default: 0.0,  unit: '' },
+  { key: 'fxEqLow',  label: 'EQ · Low',    short: 'Low',     min: -12, max: 12,   unity: 0.0,  default: 0.0,  unit: 'dB' },
+  { key: 'fxEqMid',  label: 'EQ · Mid',    short: 'Mid',     min: -12, max: 12,   unity: 0.0,  default: 0.0,  unit: 'dB' },
+  { key: 'fxEqHigh', label: 'EQ · High',   short: 'High',    min: -12, max: 12,   unity: 0.0,  default: 0.0,  unit: 'dB' },
+];
+
+export function getParamSpec(key) {
+  return AUTOMATION_PARAMS.find((p) => p.key === key) || AUTOMATION_PARAMS[0];
+}
+
 const LABEL_WIDTH = 56;   // left gutter for the y-axis labels
 const TOP_PAD = 8;
 const BOT_PAD = 8;
-const HANDLE_RADIUS = 5;
-const HIT_RADIUS = 10;
+
+// In-memory: which param the user was last viewing per track.
+// Not persisted — reset on page reload.
+const _selectedParamByTrack = new Map();
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 function ensureAutomation(track) {
   if (!track.automation || typeof track.automation !== 'object') {
-    track.automation = { volume: [] };
+    track.automation = {};
   }
-  if (!Array.isArray(track.automation.volume)) {
-    track.automation.volume = [];
-  }
+  // Don't auto-create every key — the scheduler treats missing arrays as
+  // "no automation, leave the param alone". Only guarantee the one we're
+  // about to edit (see ensureParamArray).
   return track.automation;
+}
+
+function ensureParamArray(track, paramKey) {
+  ensureAutomation(track);
+  if (!Array.isArray(track.automation[paramKey])) {
+    track.automation[paramKey] = [];
+  }
+  return track.automation[paramKey];
 }
 
 function sortPoints(points) {
@@ -95,6 +133,7 @@ export function initAutomation({ rootEl }) {
   let clipSelection = null;
   let scope = null;         // { trackIndex, track, range }
   let dragState = null;     // { pointId, index, svgEl }
+  let currentParamKey = 'volume';
 
   function commit() {
     store.emit('change', { path: 'tracks' });
@@ -111,7 +150,7 @@ export function initAutomation({ rootEl }) {
       empty.className = 'auto-empty';
       empty.innerHTML = `
         <h3>Automation</h3>
-        <p>Select a track (or a clip) to edit its volume automation.</p>
+        <p>Select a track (or a clip) to edit its automation lanes.</p>
       `;
       rootEl.appendChild(empty);
       return;
@@ -120,19 +159,56 @@ export function initAutomation({ rootEl }) {
     const { trackIndex, track, range } = scope;
     ensureAutomation(track);
 
+    // Resolve the selected param for this track — remember across renders
+    // within the same session (not persisted).
+    currentParamKey = _selectedParamByTrack.get(trackIndex) || 'volume';
+    if (!AUTOMATION_PARAMS.some((p) => p.key === currentParamKey)) {
+      currentParamKey = 'volume';
+    }
+    const paramSpec = getParamSpec(currentParamKey);
+    ensureParamArray(track, currentParamKey);
+    const points = track.automation[currentParamKey];
+
     const container = document.createElement('div');
     container.className = 'auto-root';
 
+    // ── param selector strip (new) ──────────────────────────────────
+    const selector = document.createElement('div');
+    selector.className = 'auto-param-selector';
+    for (const p of AUTOMATION_PARAMS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'auto-param-btn' + (p.key === currentParamKey ? ' auto-param-btn--active' : '');
+      btn.dataset.paramKey = p.key;
+      btn.textContent = p.short;
+      btn.title = `${p.label}${p.unit ? ` (${p.unit})` : ''}`;
+      const count = Array.isArray(track.automation[p.key]) ? track.automation[p.key].length : 0;
+      if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'auto-param-btn__badge';
+        badge.textContent = String(count);
+        btn.appendChild(badge);
+      }
+      btn.addEventListener('click', () => {
+        _selectedParamByTrack.set(trackIndex, p.key);
+        render();
+      });
+      selector.appendChild(btn);
+    }
+    container.appendChild(selector);
+
+    // ── header ──────────────────────────────────────────────────────
     const header = document.createElement('div');
     header.className = 'auto-header';
+    const rangeLabel = `${paramSpec.min} \u2192 ${paramSpec.max}${paramSpec.unit ? ' ' + paramSpec.unit : ''}`;
     header.innerHTML = `
       <span class="auto-header__title">${track.name || `Track ${trackIndex + 1}`}</span>
-      <span class="auto-header__meta">· Volume · ${range.lengthBeats.toFixed(2)} beats
-        · ${track.automation.volume.length} point${track.automation.volume.length === 1 ? '' : 's'}</span>
-      <button type="button" class="auto-clear" title="Remove all breakpoints">Clear</button>
+      <span class="auto-header__meta">\u00b7 ${paramSpec.label} (${rangeLabel}) \u00b7 ${range.lengthBeats.toFixed(2)} beats
+        \u00b7 ${points.length} point${points.length === 1 ? '' : 's'}</span>
+      <button type="button" class="auto-clear" title="Remove all breakpoints for this param">Clear</button>
     `;
     header.querySelector('.auto-clear').addEventListener('click', () => {
-      track.automation.volume = [];
+      track.automation[currentParamKey] = [];
       commit();
       render();
     });
@@ -141,19 +217,26 @@ export function initAutomation({ rootEl }) {
     const laneWrap = document.createElement('div');
     laneWrap.className = 'auto-lane-wrap';
 
-    // y-axis labels
+    // y-axis labels — driven by the current param's range.
     const yaxis = document.createElement('div');
     yaxis.className = 'auto-yaxis';
+    const mid = (paramSpec.min + paramSpec.max) / 2;
+    const fmt = (v) => {
+      if (Math.abs(v) >= 10) return v.toFixed(0);
+      if (Math.abs(v) >= 1)  return v.toFixed(1);
+      return v.toFixed(2);
+    };
     yaxis.innerHTML = `
-      <span class="auto-yaxis__tick" style="top:${TOP_PAD}px">${VALUE_MAX.toFixed(2)}</span>
-      <span class="auto-yaxis__tick" style="top:50%">${((VALUE_MAX + VALUE_MIN) / 2).toFixed(2)}</span>
-      <span class="auto-yaxis__tick" style="bottom:${BOT_PAD}px">${VALUE_MIN.toFixed(2)}</span>
+      <span class="auto-yaxis__tick" style="top:${TOP_PAD}px">${fmt(paramSpec.max)}</span>
+      <span class="auto-yaxis__tick" style="top:50%">${fmt(mid)}</span>
+      <span class="auto-yaxis__tick" style="bottom:${BOT_PAD}px">${fmt(paramSpec.min)}</span>
     `;
     laneWrap.appendChild(yaxis);
 
     const lane = document.createElement('div');
     lane.className = 'auto-lane';
     lane.dataset.trackIndex = String(trackIndex);
+    lane.dataset.paramKey = currentParamKey;
 
     // Use an inline-sized SVG so clicks are easy to map (viewBox stays
     // in pixel units, sized by the parent div's getBoundingClientRect).
@@ -182,13 +265,13 @@ export function initAutomation({ rootEl }) {
 
     const hint = document.createElement('div');
     hint.className = 'auto-hint';
-    hint.textContent = 'Click empty space to add · drag to move · right-click to delete';
+    hint.textContent = 'Click empty space to add \u00b7 drag to move \u00b7 right-click to delete';
     container.appendChild(hint);
 
     rootEl.appendChild(container);
 
     // Paint the curve + handles once the DOM is laid out.
-    requestAnimationFrame(() => repaint(lane, svg, track, range));
+    requestAnimationFrame(() => repaint(lane, svg, track, range, paramSpec));
 
     // ── click-to-add on the lane ──────────────────────────────────
     lane.addEventListener('click', (e) => {
@@ -198,17 +281,17 @@ export function initAutomation({ rootEl }) {
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
       const beat = xToBeat(x, rect.width, range);
-      const value = yToValue(y, rect.height);
-      const points = track.automation.volume;
-      points.push({ beat, value });
-      sortPoints(points);
+      const value = yToValue(y, rect.height, paramSpec);
+      const pts = track.automation[currentParamKey];
+      pts.push({ beat, value });
+      sortPoints(pts);
       commit();
       render();
     });
   }
 
   // Redraw the line + handles on the given svg / track data.
-  function repaint(lane, svg, track, range) {
+  function repaint(lane, svg, track, range, paramSpec) {
     const rect = lane.getBoundingClientRect();
     const w = rect.width;
     const h = rect.height;
@@ -220,11 +303,11 @@ export function initAutomation({ rootEl }) {
     svg.setAttribute('width', String(w));
     svg.setAttribute('height', String(h));
 
-    const points = track.automation.volume;
-    const pathD = buildPath(points, range, w, h);
+    const points = track.automation[paramSpec.key] || [];
+    const pathD = buildPath(points, range, w, h, paramSpec);
 
-    // Guide rail at value=1.0 (unity gain).
-    const unityY = valueToY(1.0, h);
+    // Guide rail at the param's unity / neutral value.
+    const unityY = valueToY(paramSpec.unity, h, paramSpec);
     const guide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     guide.setAttribute('x1', '0'); guide.setAttribute('x2', String(w));
     guide.setAttribute('y1', String(unityY)); guide.setAttribute('y2', String(unityY));
@@ -252,25 +335,27 @@ export function initAutomation({ rootEl }) {
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       const x = beatToX(p.beat, w, range);
-      const y = valueToY(p.value, h);
+      const y = valueToY(p.value, h, paramSpec);
       const dot = document.createElement('button');
       dot.type = 'button';
       dot.className = 'auto-handle';
       dot.style.left = `${x}px`;
       dot.style.top  = `${y}px`;
       dot.dataset.index = String(i);
-      dot.title = `beat ${p.beat.toFixed(2)} · ${p.value.toFixed(2)}`;
-      attachDragHandlers(dot, lane, svg);
+      dot.title = `beat ${p.beat.toFixed(2)} \u00b7 ${p.value.toFixed(2)}`;
+      attachDragHandlers(dot, lane, svg, paramSpec);
       lane.appendChild(dot);
     }
   }
 
-  function attachDragHandlers(dot, lane, svg) {
+  function attachDragHandlers(dot, lane, svg, paramSpec) {
     dot.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const idx = Number(dot.dataset.index);
       if (!Number.isFinite(idx) || !scope) return;
-      scope.track.automation.volume.splice(idx, 1);
+      const pts = scope.track.automation[paramSpec.key];
+      if (!Array.isArray(pts)) return;
+      pts.splice(idx, 1);
       commit();
       render();
     });
@@ -292,8 +377,8 @@ export function initAutomation({ rootEl }) {
         const x = clamp(ev.clientX - rect.left, 0, rect.width);
         const y = clamp(ev.clientY - rect.top, 0, rect.height);
         const beat = xToBeat(x, rect.width, scope.range);
-        const value = yToValue(y, rect.height);
-        const points = scope.track.automation.volume;
+        const value = yToValue(y, rect.height, paramSpec);
+        const points = scope.track.automation[paramSpec.key];
         const p = points[dragState.index];
         if (!p) return;
         p.beat = beat;
@@ -304,10 +389,10 @@ export function initAutomation({ rootEl }) {
         dragState.index = points.indexOf(p);
         dot.dataset.index = String(dragState.index);
         dot.style.left = `${beatToX(beat, rect.width, scope.range)}px`;
-        dot.style.top  = `${valueToY(value, rect.height)}px`;
-        dot.title = `beat ${beat.toFixed(2)} · ${value.toFixed(2)}`;
+        dot.style.top  = `${valueToY(value, rect.height, paramSpec)}px`;
+        dot.title = `beat ${beat.toFixed(2)} \u00b7 ${value.toFixed(2)}`;
         // Repaint the line live.
-        repaintLineOnly(lane, svg);
+        repaintLineOnly(lane, svg, paramSpec);
       };
 
       const onUp = () => {
@@ -334,7 +419,7 @@ export function initAutomation({ rootEl }) {
   }
 
   // Lightweight in-flight repaint — just redraw the path while dragging.
-  function repaintLineOnly(lane, svg) {
+  function repaintLineOnly(lane, svg, paramSpec) {
     if (!scope) return;
     const rect = lane.getBoundingClientRect();
     const w = rect.width;
@@ -344,15 +429,15 @@ export function initAutomation({ rootEl }) {
     svg.setAttribute('width', String(w));
     svg.setAttribute('height', String(h));
 
-    const unityY = valueToY(1.0, h);
+    const unityY = valueToY(paramSpec.unity, h, paramSpec);
     const guide = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     guide.setAttribute('x1', '0'); guide.setAttribute('x2', String(w));
     guide.setAttribute('y1', String(unityY)); guide.setAttribute('y2', String(unityY));
     guide.setAttribute('class', 'auto-svg__unity');
     svg.appendChild(guide);
 
-    const points = scope.track.automation.volume;
-    const pathD = buildPath(points, scope.range, w, h);
+    const points = scope.track.automation[paramSpec.key] || [];
+    const pathD = buildPath(points, scope.range, w, h, paramSpec);
     if (pathD) {
       const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       fill.setAttribute('d', `${pathD} L ${w},${h} L 0,${h} Z`);
@@ -374,16 +459,18 @@ export function initAutomation({ rootEl }) {
     const t = clamp(x / w, 0, 1);
     return range.startBeat + t * range.lengthBeats;
   }
-  function valueToY(value, h) {
-    const t = (VALUE_MAX - value) / (VALUE_MAX - VALUE_MIN);
+  function valueToY(value, h, paramSpec) {
+    const span = paramSpec.max - paramSpec.min;
+    const t = span === 0 ? 0 : (paramSpec.max - value) / span;
     return TOP_PAD + clamp(t, 0, 1) * (h - TOP_PAD - BOT_PAD);
   }
-  function yToValue(y, h) {
+  function yToValue(y, h, paramSpec) {
+    const span = paramSpec.max - paramSpec.min;
     const t = clamp((y - TOP_PAD) / (h - TOP_PAD - BOT_PAD), 0, 1);
-    return VALUE_MAX - t * (VALUE_MAX - VALUE_MIN);
+    return paramSpec.max - t * span;
   }
 
-  function buildPath(points, range, w, h) {
+  function buildPath(points, range, w, h, paramSpec) {
     if (!points || points.length === 0) return '';
     // Extend the curve to 0 and to range end using the first/last point
     // so the drawn line spans the full lane (scheduler does the same).
@@ -399,7 +486,7 @@ export function initAutomation({ rootEl }) {
     for (let i = 0; i < virt.length; i++) {
       const p = virt[i];
       const x = beatToX(p.beat, w, range);
-      const y = valueToY(p.value, h);
+      const y = valueToY(p.value, h, paramSpec);
       d += (i === 0 ? 'M ' : ' L ') + x.toFixed(2) + ',' + y.toFixed(2);
     }
     return d;
@@ -415,7 +502,12 @@ export function initAutomation({ rootEl }) {
     if (!evt) return;
     if (evt.path === 'tracks' || evt.path === 'arrangement') render();
   });
-  store.on('loaded', () => { clipSelection = null; render(); });
+  store.on('loaded', () => {
+    clipSelection = null;
+    // Reset per-track param memory — new project, new context.
+    _selectedParamByTrack.clear();
+    render();
+  });
 
   // Repaint when the pane becomes visible (viewBox needs size).
   const zoneRoot = document.querySelector('.zone--workbench');
