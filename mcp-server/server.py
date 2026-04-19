@@ -1,5 +1,7 @@
 import json
+import os
 import random
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -11,11 +13,22 @@ mcp = FastMCP(
         "Music production MCP server for Bassmash DAW. "
         "Use generate_beat to create beats from text descriptions. "
         "Use replicate_from_audio to analyze an MP3 and recreate its beat pattern. "
-        "Projects are saved to ~/bassmash-projects/ and can be opened in Bassmash."
+        "Projects live in $BASSMASH_PROJECTS_DIR (default ~/bassmash-projects/) "
+        "and are hot-reloaded in any open Bassmash browser tab within ~500ms."
     ),
 )
 
-PROJECTS_DIR = Path.home() / "bassmash-projects"
+
+def _projects_dir() -> Path:
+    """Honor $BASSMASH_PROJECTS_DIR so the MCP reads/writes the same directory
+    as cli/store.py and the FastAPI backend."""
+    override = os.environ.get("BASSMASH_PROJECTS_DIR")
+    return Path(override).expanduser() if override else Path.home() / "bassmash-projects"
+
+
+# Kept for any legacy caller; prefer _projects_dir() at call time so tests and
+# users changing BASSMASH_PROJECTS_DIR at runtime are reflected immediately.
+PROJECTS_DIR = _projects_dir()
 
 KIT_SAMPLES = {
     "kicks": ["kit://kick-punchy.wav", "kit://kick-deep.wav", "kit://kick-808.wav"],
@@ -185,12 +198,27 @@ def _build_project(
 
 
 def _save_project(name: str, project: dict) -> Path:
-    """Save project to disk and return path."""
-    project_dir = PROJECTS_DIR / name
+    """Atomic project.json write. Mirrors cli/store.py::write_project:
+    tempfile -> fsync -> os.replace, so an interrupted write can't leave a
+    half-written project.json. Creates samples/ and audio/ to match the
+    layout the browser expects."""
+    project_dir = _projects_dir() / name
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "samples").mkdir(exist_ok=True)
+    (project_dir / "audio").mkdir(exist_ok=True)
     project_path = project_dir / "project.json"
-    project_path.write_text(json.dumps(project, indent=2))
+    serialised = json.dumps(project, indent=2)
+    fd, tmp_path = tempfile.mkstemp(prefix=".project.", suffix=".json.tmp", dir=project_dir)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(serialised)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, project_path)
+    except BaseException:
+        try: os.unlink(tmp_path)
+        except FileNotFoundError: pass
+        raise
     return project_path
 
 
@@ -359,7 +387,7 @@ def replicate_from_audio(
 
 
 def _load_project(name: str) -> dict | None:
-    path = PROJECTS_DIR / name / "project.json"
+    path = _projects_dir() / name / "project.json"
     if not path.exists():
         return None
     return json.loads(path.read_text())
@@ -367,10 +395,11 @@ def _load_project(name: str) -> dict | None:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def list_projects() -> str:
-    """List all Bassmash projects in ~/bassmash-projects/."""
-    if not PROJECTS_DIR.exists():
+    """List all Bassmash projects in $BASSMASH_PROJECTS_DIR."""
+    root = _projects_dir()
+    if not root.exists():
         return "No projects directory found."
-    projects = [d.name for d in PROJECTS_DIR.iterdir() if d.is_dir() and (d / "project.json").exists()]
+    projects = [d.name for d in root.iterdir() if d.is_dir() and (d / "project.json").exists()]
     if not projects:
         return "No projects found."
     lines = [f"Found {len(projects)} project(s):"]
@@ -695,6 +724,219 @@ def duplicate_project(
         return f"Project '{source_name}' not found."
     _save_project(dest_name, proj)
     return f"Duplicated '{source_name}' -> '{dest_name}'"
+
+
+_AUTOMATION_KEYS = {
+    "volume", "pan", "sendA", "sendB",
+    "fxReverb", "fxDelay", "fxEqLow", "fxEqMid", "fxEqHigh",
+}
+
+
+@mcp.tool()
+def rename_track(
+    project_name: Annotated[str, "Project to modify"],
+    track_index: Annotated[int, "Track index (0-based)"],
+    name: Annotated[str, "New track name"],
+) -> str:
+    """Rename a track. Does not change any pattern/arrangement references."""
+    proj = _load_project(project_name)
+    if not proj:
+        return f"Project '{project_name}' not found."
+    if track_index >= len(proj["tracks"]):
+        return f"Track index {track_index} out of range."
+    old = proj["tracks"][track_index].get("name", f"Track {track_index}")
+    proj["tracks"][track_index]["name"] = name
+    _save_project(project_name, proj)
+    return f"Renamed track {track_index}: '{old}' -> '{name}'"
+
+
+@mcp.tool()
+def set_track_sends(
+    project_name: Annotated[str, "Project to modify"],
+    track_index: Annotated[int, "Track index (0-based)"],
+    bus_a: Annotated[bool | None, "Route this track into bus A (reverb). None = leave unchanged."] = None,
+    bus_b: Annotated[bool | None, "Route this track into bus B (delay). None = leave unchanged."] = None,
+    bus_a_gain: Annotated[float | None, "Send gain for bus A (0.0..1.5). None = leave unchanged."] = None,
+    bus_b_gain: Annotated[float | None, "Send gain for bus B (0.0..1.5). None = leave unchanged."] = None,
+) -> str:
+    """Configure bus A (reverb) and bus B (delay) sends for a track.
+
+    Gain is post-fader, applied only when the corresponding send is on.
+    Persists as track.sends = [bool, bool] and track.sendGains = [float, float].
+    The browser replays both fields into the live mixer graph on load."""
+    proj = _load_project(project_name)
+    if not proj:
+        return f"Project '{project_name}' not found."
+    if track_index >= len(proj["tracks"]):
+        return f"Track index {track_index} out of range."
+    track = proj["tracks"][track_index]
+    sends = list(track.get("sends") or [False, False])
+    gains = list(track.get("sendGains") or [1.0, 1.0])
+    while len(sends) < 2: sends.append(False)
+    while len(gains) < 2: gains.append(1.0)
+    changes = []
+    if bus_a is not None:
+        sends[0] = bool(bus_a); changes.append(f"busA={sends[0]}")
+    if bus_b is not None:
+        sends[1] = bool(bus_b); changes.append(f"busB={sends[1]}")
+    if bus_a_gain is not None:
+        gains[0] = max(0.0, min(1.5, float(bus_a_gain))); changes.append(f"busA_gain={gains[0]:.2f}")
+    if bus_b_gain is not None:
+        gains[1] = max(0.0, min(1.5, float(bus_b_gain))); changes.append(f"busB_gain={gains[1]:.2f}")
+    track["sends"] = sends
+    track["sendGains"] = gains
+    _save_project(project_name, proj)
+    return f"Sends on '{track.get('name')}': {', '.join(changes) if changes else '(no changes)'}"
+
+
+@mcp.tool()
+def set_track_automation(
+    project_name: Annotated[str, "Project to modify"],
+    track_index: Annotated[int, "Track index (0-based)"],
+    param: Annotated[str, "One of: volume, pan, sendA, sendB, fxReverb, fxDelay, fxEqLow, fxEqMid, fxEqHigh"],
+    points: Annotated[list[dict], "Breakpoints: [{beat: float, value: float}, ...]. Pass [] to clear."],
+) -> str:
+    """Set an automation lane for a track parameter.
+
+    Value ranges the browser clamps to at playback time:
+        volume     0 .. 1.5   (unity 1.0)
+        pan       -1 .. 1     (centre 0)
+        sendA/B    0 .. 1.5   (unity 1.0)
+        fxReverb   0 .. 1     (wet mix)
+        fxDelay    0 .. 1
+        fxEqLow/Mid/High  -24 .. 24  dB
+
+    Breakpoints interpolate linearly. `beat` is in quarter-note beats.
+    Pass points=[] to remove the lane entirely."""
+    if param not in _AUTOMATION_KEYS:
+        return f"Unknown param '{param}'. Known: {sorted(_AUTOMATION_KEYS)}"
+    proj = _load_project(project_name)
+    if not proj:
+        return f"Project '{project_name}' not found."
+    if track_index >= len(proj["tracks"]):
+        return f"Track index {track_index} out of range."
+    track = proj["tracks"][track_index]
+    normalised: list[dict] = []
+    for p in points:
+        if not isinstance(p, dict): continue
+        beat = p.get("beat"); value = p.get("value")
+        if not isinstance(beat, (int, float)) or not isinstance(value, (int, float)): continue
+        if beat < 0: continue
+        normalised.append({"beat": float(beat), "value": float(value)})
+    normalised.sort(key=lambda x: x["beat"])
+    automation = track.setdefault("automation", {})
+    if not normalised:
+        automation.pop(param, None)
+    else:
+        automation[param] = normalised
+    if not automation:
+        track.pop("automation", None)
+    _save_project(project_name, proj)
+    return f"Automation '{param}' on '{track.get('name')}': {len(normalised)} point(s)"
+
+
+@mcp.tool()
+def set_synth_params(
+    project_name: Annotated[str, "Project to modify"],
+    track_index: Annotated[int, "Track index (0-based) — must be a synth track"],
+    waveform: Annotated[str | None, "sine | square | sawtooth | triangle"] = None,
+    filter_type: Annotated[str | None, "lowpass | highpass | bandpass | notch"] = None,
+    filter_freq: Annotated[float | None, "Filter cutoff in Hz (20..22050)"] = None,
+    filter_q: Annotated[float | None, "Filter resonance Q (0.1..20)"] = None,
+    attack: Annotated[float | None, "Attack time in seconds (>= 0)"] = None,
+    decay: Annotated[float | None, "Decay time in seconds (>= 0)"] = None,
+    sustain: Annotated[float | None, "Sustain level (0..1)"] = None,
+    release: Annotated[float | None, "Release time in seconds (>= 0)"] = None,
+) -> str:
+    """Configure synthesiser params on a synth track: oscillator waveform,
+    filter type/cutoff/Q, and ADSR envelope. Only the fields you pass are
+    written; others are left alone. The engine reads these when the track's
+    pattern triggers a note."""
+    proj = _load_project(project_name)
+    if not proj:
+        return f"Project '{project_name}' not found."
+    if track_index >= len(proj["tracks"]):
+        return f"Track index {track_index} out of range."
+    track = proj["tracks"][track_index]
+    if track.get("type") != "synth":
+        return f"Track {track_index} is not a synth track (type={track.get('type')!r})."
+    params = track.setdefault("synthParams", {})
+    waveforms = {"sine", "square", "sawtooth", "triangle"}
+    filter_types = {"lowpass", "highpass", "bandpass", "notch"}
+    changes = []
+    if waveform is not None:
+        if waveform not in waveforms:
+            return f"waveform must be one of {sorted(waveforms)}"
+        params["waveform"] = waveform; changes.append(f"waveform={waveform}")
+    if filter_type is not None:
+        if filter_type not in filter_types:
+            return f"filter_type must be one of {sorted(filter_types)}"
+        params["filterType"] = filter_type; changes.append(f"filterType={filter_type}")
+    if filter_freq is not None:
+        params["filterFreq"] = max(20.0, min(22050.0, float(filter_freq)))
+        changes.append(f"filterFreq={params['filterFreq']:.0f}Hz")
+    if filter_q is not None:
+        params["filterQ"] = max(0.1, min(20.0, float(filter_q)))
+        changes.append(f"filterQ={params['filterQ']:.2f}")
+    if attack is not None:
+        params["attack"] = max(0.0, float(attack)); changes.append(f"attack={params['attack']:.3f}s")
+    if decay is not None:
+        params["decay"] = max(0.0, float(decay)); changes.append(f"decay={params['decay']:.3f}s")
+    if sustain is not None:
+        params["sustain"] = max(0.0, min(1.0, float(sustain))); changes.append(f"sustain={params['sustain']:.2f}")
+    if release is not None:
+        params["release"] = max(0.0, float(release)); changes.append(f"release={params['release']:.3f}s")
+    _save_project(project_name, proj)
+    return f"synthParams on '{track.get('name')}': {', '.join(changes) if changes else '(no changes)'}"
+
+
+@mcp.tool()
+def set_tempo_changes(
+    project_name: Annotated[str, "Project to modify"],
+    changes: Annotated[list[dict], "[{beat: int (16th-note step), bpm: number 20..300}, ...]. Pass [] to clear."],
+) -> str:
+    """Replace the project's tempo-change list.
+
+    `beat` is in 16th-note steps (the same unit the engine schedules on).
+    `project.bpm` is the fallback when no tempo entry has beat <= current.
+    Pass changes=[] to remove all tempo changes."""
+    proj = _load_project(project_name)
+    if not proj:
+        return f"Project '{project_name}' not found."
+    normalised: list[dict] = []
+    for c in changes:
+        if not isinstance(c, dict): continue
+        beat = c.get("beat"); bpm = c.get("bpm")
+        if not isinstance(beat, (int, float)) or not isinstance(bpm, (int, float)): continue
+        if beat < 0: continue
+        if not 20 <= bpm <= 300: continue
+        normalised.append({"beat": int(beat), "bpm": float(bpm)})
+    normalised.sort(key=lambda x: x["beat"])
+    proj["tempoChanges"] = normalised
+    _save_project(project_name, proj)
+    return f"tempoChanges: {len(normalised)} entry(s)"
+
+
+@mcp.tool()
+def set_markers(
+    project_name: Annotated[str, "Project to modify"],
+    markers: Annotated[list[dict], "[{name: str, beat: int (16th-note step)}, ...]. Pass [] to clear."],
+) -> str:
+    """Replace the project's markers list (the labeled drops on the global strip)."""
+    proj = _load_project(project_name)
+    if not proj:
+        return f"Project '{project_name}' not found."
+    normalised: list[dict] = []
+    for m in markers:
+        if not isinstance(m, dict): continue
+        name = m.get("name"); beat = m.get("beat")
+        if not isinstance(name, str) or not name.strip(): continue
+        if not isinstance(beat, (int, float)) or beat < 0: continue
+        normalised.append({"name": name.strip(), "beat": int(beat)})
+    normalised.sort(key=lambda x: x["beat"])
+    proj["markers"] = normalised
+    _save_project(project_name, proj)
+    return f"markers: {len(normalised)} entry(s)"
 
 
 @mcp.tool()

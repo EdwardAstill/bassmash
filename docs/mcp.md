@@ -31,7 +31,7 @@ Restart the client. Tools show up as `mcp__bassmash-mcp__<name>`.
 
 ---
 
-## Tool catalog (16 tools)
+## Tool catalog (22 tools)
 
 ### Read-only — for the agent to inspect state
 
@@ -83,6 +83,12 @@ Analyses an MP3 / WAV (librosa BPM + band-onset detection) and reconstructs a dr
 | `delete_track(project_name, track_index)` | Remove a track + all its arrangement clips, shift indices. |
 | `duplicate_project(src_name, new_name)` | Copy `project.json` + samples/ + audio/ to a new project. |
 | `clear_pattern(project_name, pattern_index)` | Wipe steps (or notes) on the given pattern. |
+| `rename_track(project_name, track_index, name)` | Rename a track in place (no pattern/arrangement changes). |
+| `set_track_sends(project_name, track_index, bus_a?, bus_b?, bus_a_gain?, bus_b_gain?)` | Route a track into bus A (reverb) / bus B (delay) with per-pair gain. Persists to `track.sends[]` and `track.sendGains[]`; browser replays into the live mixer graph. |
+| `set_track_automation(project_name, track_index, param, points)` | Breakpoint lane for one of `volume`, `pan`, `sendA`, `sendB`, `fxReverb`, `fxDelay`, `fxEqLow`, `fxEqMid`, `fxEqHigh`. `points: [{beat, value}]`. Pass `[]` to clear. Scheduler + offline render ramp linearly between points. |
+| `set_synth_params(project_name, track_index, waveform?, filter_type?, filter_freq?, filter_q?, attack?, decay?, sustain?, release?)` | Configure the synth osc/filter/ADSR for a synth track. Writes `track.synthParams`. |
+| `set_tempo_changes(project_name, changes)` | Replace `project.tempoChanges` with `[{beat, bpm}]`. `beat` is the 16th-note step. `project.bpm` stays the fallback. |
+| `set_markers(project_name, markers)` | Replace `project.markers` with `[{name, beat}]`. Global-strip labels. |
 
 ## Typical session
 

@@ -119,7 +119,10 @@ Bassmash ships an MCP server so Claude (or any MCP client) can compose with stru
 
 - `generate_beat` — produces a full multi-track beat from a text prompt (genre, BPM, elements)
 - `replicate_from_audio` — analyses an MP3 and recreates its drum pattern + tempo
-- `edit_drum_pattern`, `edit_notes`, `mix_track`, `set_effects`, `set_arrangement`, and the rest
+- `edit_drum_pattern`, `edit_notes`, `mix_track`, `set_effects`, `set_arrangement` — core editing
+- `set_track_sends`, `set_track_automation`, `set_synth_params` — routing, breakpoint lanes, synth config
+- `set_tempo_changes`, `set_markers`, `rename_track` — arrangement metadata
+- …and the rest (22 tools total)
 
 Connect your MCP client to `mcp-server/server.py` — see the MCP doc for config details.
 
