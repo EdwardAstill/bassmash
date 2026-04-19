@@ -565,6 +565,168 @@ body { min-width: 1280px; min-height: 760px; }
 .inspector__k { color: var(--text-muted); }
 .inspector__v { color: var(--text-primary); font-family: var(--font-mono); font-size: var(--text-sm); }
 
+/* Synth params summary — compact row in the inspector; full editor in the
+   Workbench → Synth tab. */
+.inspector__synth-panel { padding: 0 var(--space-3) var(--space-2); }
+.inspector__synth-panel .inspector__row { gap: var(--space-3); }
+.inspector__synth-panel .inspector__v { text-transform: capitalize; }
+
+/* === Synth tab === */
+.synth-panel {
+  padding: var(--space-3);
+  color: var(--text-primary);
+}
+.synth-panel__header {
+  font-size: var(--text-xs);
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-3);
+}
+.synth-panel__grid {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+.synth-panel__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-right: var(--space-4);
+  border-right: 1px solid var(--border);
+}
+.synth-panel__block:last-child { border-right: 0; padding-right: 0; }
+.synth-panel__block--adsr { flex: 1; }
+
+.synth-panel__label {
+  font-size: var(--text-xs);
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.synth-panel__wave-row,
+.synth-panel__filter-types {
+  display: flex;
+  gap: 2px;
+}
+.synth-wave-btn,
+.synth-filter-btn {
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1;
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+.synth-wave-btn svg  { display: block; }
+.synth-wave-btn[data-active="true"],
+.synth-filter-btn[data-active="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg, #fff);
+}
+.synth-wave-btn:hover:not([data-active="true"]),
+.synth-filter-btn:hover:not([data-active="true"]) {
+  background: var(--item-hover);
+  color: var(--text-primary);
+}
+
+.synth-panel__caption {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
+.synth-panel__knobs {
+  display: flex;
+  gap: var(--space-3);
+}
+.synth-knob-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.synth-knob {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  position: relative;
+  cursor: ns-resize;
+  user-select: none;
+  touch-action: none;
+  transition: transform 80ms linear;
+}
+.synth-knob::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 2px;
+  height: 40%;
+  background: var(--accent);
+  transform: translateX(-50%);
+  border-radius: 1px;
+}
+.synth-knob__label {
+  font-size: var(--text-xs);
+  letter-spacing: .06em;
+  color: var(--text-muted);
+}
+.synth-knob__val {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+}
+
+.synth-adsr {
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.synth-adsr__fill {
+  fill: var(--accent);
+  fill-opacity: 0.18;
+  stroke: none;
+  pointer-events: none;
+}
+.synth-adsr__path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.synth-adsr__handle {
+  fill: var(--surface-raised);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  cursor: grab;
+  touch-action: none;
+}
+.synth-adsr__handle:active { cursor: grabbing; }
+.synth-adsr__readout {
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+/* === /Synth tab === */
+
 .inspector__heading {
   padding: var(--space-2) var(--space-3) var(--space-1);
   font-size: var(--text-xs);

@@ -157,6 +157,15 @@
         <li class="fx-chain__item"><span>Limiter</span><span class="fx-chain__status fx-chain__status--off">OFF</span></li>
         <li class="fx-chain__item fx-chain__item--add">＋ Add device</li>
       </ul>
+
+      <!-- One-liner summary when the selected track is a synth. Deep
+           editing (waveform, filter, ADSR) lives in the Workbench → Synth tab. -->
+      <div class="inspector__synth-panel" hidden>
+        <div class="inspector__row">
+          <span class="inspector__k">Synth</span>
+          <span class="inspector__v" data-synth-field="summary">—</span>
+        </div>
+      </div>
     </aside>
 
     <!-- ZONE 5 — GLOBAL STRIP -->
@@ -197,8 +206,9 @@
       <div class="tab-bar">
         <button class="tab-bar__tab tab-bar__tab--active">Mixer</button>
         <button class="tab-bar__tab">Piano Roll</button>
-        <button class="tab-bar__tab">Automation</button>
+        <button class="tab-bar__tab">Synth</button>
         <button class="tab-bar__tab">Sampler</button>
+        <button class="tab-bar__tab">Automation</button>
         <span class="tab-bar__spacer"></span>
         <button class="tool-panel-button" title="Fold">▁</button>
         <button class="tool-panel-button" title="Pop out">▢</button>

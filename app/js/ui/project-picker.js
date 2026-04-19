@@ -87,17 +87,27 @@ function ensureFilePopover() {
     });
   if (!fileBtn) return null;
 
-  let popover = fileBtn.querySelector('.menu-popover[data-menu="file"]');
+  // export-menu appends its popover to document.body (to escape zone
+  // overflow: hidden); older builds put it inside the File button. Accept
+  // either location so we never end up with a second stranded popover.
+  let popover = document.body.querySelector('.menu-popover[data-menu="file"]')
+             || fileBtn.querySelector('.menu-popover[data-menu="file"]');
   if (!popover) {
     popover = document.createElement('div');
     popover.className = 'menu-popover';
     popover.setAttribute('data-menu', 'file');
-    fileBtn.appendChild(popover);
+    document.body.appendChild(popover);
+    popover._fileBtn = fileBtn;
 
     // Wire open/close since export-menu isn't around to do it.
     fileBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const open = popover.getAttribute('data-open') === 'true';
+      if (!open) {
+        const r = fileBtn.getBoundingClientRect();
+        popover.style.top = (r.bottom + 2) + 'px';
+        popover.style.left = r.left + 'px';
+      }
       popover.setAttribute('data-open', open ? 'false' : 'true');
     });
     document.addEventListener('click', (e) => {

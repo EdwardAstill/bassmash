@@ -140,6 +140,9 @@ export function initInspector(ctx) {
   const fxListEl = root.querySelector('.fx-chain');
   const fxAddItem = fxListEl ? fxListEl.querySelector('.fx-chain__item--add') : null;
 
+  const synthPanelEl   = root.querySelector('.inspector__synth-panel');
+  const synthSummaryEl = root.querySelector('[data-synth-field="summary"]');
+
   // -------- helpers ----------
   // "Master" plus any active sends, e.g. "Master + Bus A" or "Master + Bus A + Bus B".
   function formatRouting(trackIdx) {
@@ -225,6 +228,22 @@ export function initInspector(ctx) {
     if (widthLabelEl) widthLabelEl.textContent = String(Math.round(w));
 
     renderFx(ch);
+    renderSynthPanel(track);
+  }
+
+  // -------- synth params summary ----------
+  // Compact one-liner for the selected synth track. Deep editing happens in
+  // the Workbench → Synth tab.
+  function renderSynthPanel(track) {
+    if (!synthPanelEl) return;
+    if (!track || track.type !== 'synth') {
+      synthPanelEl.hidden = true;
+      return;
+    }
+    synthPanelEl.hidden = false;
+    const p = track.synthParams || {};
+    const wave = p.waveform || 'sine';
+    if (synthSummaryEl) synthSummaryEl.textContent = wave;
   }
 
   // -------- FX chain render ----------

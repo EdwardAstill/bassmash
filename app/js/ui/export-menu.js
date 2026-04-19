@@ -16,12 +16,12 @@ function injectStyle() {
   el.setAttribute('data-src', 'export-menu');
   el.textContent = `
     .menu-bar-button { position: relative; }
+    /* position: fixed + z-index > any zone so the dropdown escapes any
+       ancestor overflow: hidden. Top/left set in JS from the button rect. */
     .menu-popover {
-      position: absolute;
-      top: 100%;
-      left: 0;
+      position: fixed;
       min-width: 180px;
-      z-index: 50;
+      z-index: 1200;
       background: var(--surface-raised);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
@@ -69,8 +69,16 @@ function buildPopover(fileBtn) {
   popover.innerHTML = `
     <button class="menu-popover__item" data-action="export-mp3">Export as MP3…</button>
   `;
-  fileBtn.appendChild(popover);
+  // Append to body (not fileBtn) so ancestor overflow: hidden can't clip us.
+  document.body.appendChild(popover);
+  popover._fileBtn = fileBtn;
   return popover;
+}
+
+function positionPopover(popover) {
+  const r = popover._fileBtn.getBoundingClientRect();
+  popover.style.top = (r.bottom + 2) + 'px';
+  popover.style.left = r.left + 'px';
 }
 
 function setChip(chip, state, text) {
@@ -110,6 +118,7 @@ export function initExportMenu() {
   function closePopover() { popover.setAttribute('data-open', 'false'); }
   function togglePopover() {
     const open = popover.getAttribute('data-open') === 'true';
+    if (!open) positionPopover(popover);
     popover.setAttribute('data-open', open ? 'false' : 'true');
   }
 

@@ -8,6 +8,7 @@ import { initTabBar } from '../tab-bar.js';
 import { initPianoRoll }    from '../workbench/piano-roll.js';
 import { initAutomation }   from '../workbench/automation.js';
 import { initSamplerPanel } from '../workbench/sampler-panel.js';
+import { initSynthPanel }   from '../workbench/synth-panel.js';
 
 let _stylesInjected = false;
 function injectStyles() {
@@ -28,6 +29,8 @@ function injectStyles() {
     .zone--workbench[data-active-tab="Automation"] .workbench-pane--automation { display: block; }
     .zone--workbench[data-active-tab="Sampler"] .mixer { display: none; }
     .zone--workbench[data-active-tab="Sampler"] .workbench-pane--sampler { display: block; }
+    .zone--workbench[data-active-tab="Synth"] .mixer { display: none; }
+    .zone--workbench[data-active-tab="Synth"] .workbench-pane--synth { display: block; }
   `;
   document.head.appendChild(style);
 }
@@ -51,26 +54,30 @@ export function initWorkbench(ctx) {
   automationPane.className = 'workbench-pane workbench-pane--automation';
   const samplerPane = document.createElement('div');
   samplerPane.className = 'workbench-pane workbench-pane--sampler';
+  const synthPane = document.createElement('div');
+  synthPane.className = 'workbench-pane workbench-pane--synth';
 
   // Append after mixer if present, otherwise at end of zone.
-  const anchor = mixerEl || root;
   const parent = mixerEl ? mixerEl.parentNode : root;
   if (mixerEl) {
-    parent.insertBefore(pianorollPane, mixerEl.nextSibling);
+    parent.insertBefore(pianorollPane,  mixerEl.nextSibling);
     parent.insertBefore(automationPane, pianorollPane.nextSibling);
-    parent.insertBefore(samplerPane, automationPane.nextSibling);
+    parent.insertBefore(samplerPane,    automationPane.nextSibling);
+    parent.insertBefore(synthPane,      samplerPane.nextSibling);
   } else {
     root.appendChild(pianorollPane);
     root.appendChild(automationPane);
     root.appendChild(samplerPane);
+    root.appendChild(synthPane);
   }
 
   initTabBar(root.querySelector('.tab-bar'), (tabName) => {
     root.setAttribute('data-active-tab', tabName);
   });
 
-  // Wire the three new panes.
+  // Wire the workbench panes.
   initPianoRoll({ ctx, rootEl: pianorollPane });
   initAutomation({ ctx, rootEl: automationPane });
   initSamplerPanel({ ctx, rootEl: samplerPane });
+  initSynthPanel({ ctx, rootEl: synthPane });
 }
