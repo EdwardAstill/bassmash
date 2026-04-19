@@ -1,7 +1,13 @@
+// Autosave debounces for 2 s of inactivity, but forces a save every 10 s of
+// continuous edits so a long drag session can't starve the save pipeline.
+const SAVE_DEBOUNCE_MS = 2000;
+const SAVE_MAX_DELAY_MS = 10000;
+
 class StateStore {
   constructor() {
     this._listeners = {};
     this._saveTimer = null;
+    this._saveMaxTimer = null;
     this._saveFn = null;
     this.projectName = null;
     this.data = {
@@ -41,17 +47,27 @@ class StateStore {
     this._scheduleSave();
   }
   setSaveFn(fn) { this._saveFn = fn; }
+  async _flushSave() {
+    if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
+    if (this._saveMaxTimer) { clearTimeout(this._saveMaxTimer); this._saveMaxTimer = null; }
+    this.emit('saving');
+    try {
+      if (this._saveFn) await this._saveFn(this.data);
+      this.emit('saved');
+    } catch (err) {
+      this.emit('saveFailed', err);
+    }
+  }
   _scheduleSave() {
+    // Trailing debounce — flush SAVE_DEBOUNCE_MS after the last edit.
     if (this._saveTimer) clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(async () => {
-      this.emit('saving');
-      try {
-        if (this._saveFn) await this._saveFn(this.data);
-        this.emit('saved');
-      } catch (err) {
-        this.emit('saveFailed', err);
-      }
-    }, 2000);
+    this._saveTimer = setTimeout(() => this._flushSave(), SAVE_DEBOUNCE_MS);
+    // Max delay — guarantees a flush during a long continuous edit session
+    // (e.g. a user nudging a knob for >10 s would otherwise never trigger
+    // the trailing debounce).
+    if (!this._saveMaxTimer) {
+      this._saveMaxTimer = setTimeout(() => this._flushSave(), SAVE_MAX_DELAY_MS);
+    }
   }
   load(projectName, data) {
     this.projectName = projectName;

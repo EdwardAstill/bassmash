@@ -19,16 +19,18 @@ const KNOB_DRAG_PX = 160;
 const BUS_FX_SPEC = [
   // Bus A · Reverb
   { busKey: 'busA', knobs: [
-    { label: 'Rev', param: 'reverb', persistKey: 'reverb', min: 0, max: 1, reset: 1 },
+    { label: 'Rev',  param: 'reverb',       persistKey: 'reverb',       min: 0,    max: 1,    reset: 1   },
   ] },
-  // Bus B · Delay
+  // Bus B · Delay (wet mix + time in seconds + feedback 0..~0.95)
   { busKey: 'busB', knobs: [
-    { label: 'Dly', param: 'delay',  persistKey: 'delay',  min: 0, max: 1, reset: 0.5 },
+    { label: 'Dly',  param: 'delay',        persistKey: 'delay',        min: 0,    max: 1,    reset: 0.5 },
+    { label: 'Time', param: 'delayTime',    persistKey: 'delayTime',    min: 0.05, max: 1.5,  reset: 0.375 },
+    { label: 'Fdbk', param: 'delayFeedback', persistKey: 'delayFeedback', min: 0,   max: 0.95, reset: 0.4 },
   ] },
 ];
 const BUS_MIX_DEFAULTS = {
   busA: { reverb: 1.0 },
-  busB: { delay: 0.5 },
+  busB: { delay: 0.5, delayTime: 0.375, delayFeedback: 0.4 },
 };
 
 // -------- style injection (data-active for .mr-btn, etc.) ------------
@@ -163,6 +165,14 @@ export function initMixer(ctx) {
   // Current set of track strips (recomputed on each rebuild).
   let trackStrips = [];
 
+  // All meterable strips (tracks + buses + master), rebuilt on structural
+  // changes. Avoids allocating a fresh array every meter tick (~60 Hz).
+  let _allStrips = [];
+  function rebuildAllStrips() {
+    _allStrips = [...trackStrips, ...busStrips];
+    if (masterStrip) _allStrips.push(masterStrip);
+  }
+
   // ---- channel lookup -----------------------------------------------
   function channelForStrip(strip) {
     const role = strip.dataset.role;
@@ -267,12 +277,18 @@ export function initMixer(ctx) {
   function onPointerUp() { _dragStrip = null; }
 
   // Wire all per-strip interactions. Track strips get re-wired on rebuild;
-  // static strips are wired once (see bottom).
+  // static strips are wired once (see bottom). Also caches DOM refs used
+  // every meter tick so we don't querySelector ~60 Hz per strip.
   function wireStrip(strip) {
+    strip._meterL = strip.querySelector('.fader-meter--l');
+    strip._meterR = strip.querySelector('.fader-meter--r');
+    strip._cap    = strip.querySelector('.fader-cap');
+    strip._dbEl   = strip.querySelector('.channel-strip__db');
+
     const faderEl = strip.querySelector('.channel-strip__fader');
     if (faderEl) {
       faderEl.addEventListener('pointerdown', onPointerDown);
-      const cap = strip.querySelector('.fader-cap');
+      const cap = strip._cap;
       if (cap) cap.addEventListener('dblclick', (e) => {
         e.stopPropagation();
         applyFaderPct(strip, UNITY_PCT);
@@ -396,6 +412,7 @@ export function initMixer(ctx) {
     tracksHost.insertAdjacentHTML('beforeend', html);
     trackStrips = Array.from(tracksHost.querySelectorAll('.channel-strip'));
     trackStrips.forEach(wireStrip);
+    rebuildAllStrips();
 
     // Restore selection highlight if applicable.
     const sel = store.selectedTrack;
@@ -625,6 +642,7 @@ export function initMixer(ctx) {
 
   // Wire static (bus + master) strips once at init.
   staticStrips.forEach(wireStrip);
+  rebuildAllStrips();
 
   // Pre-engine paint: build any existing track strips immediately so the
   // DOM count matches the project, even before the audio engine starts.
@@ -645,17 +663,26 @@ export function initMixer(ctx) {
     }
     return Math.sqrt(sum / buf.length);
   }
+  // Track whether meters are all settled at 0 so we can skip DOM writes
+  // once playback has stopped and the release decay has completed.
+  let _metersIdle = true;
+  const METER_IDLE_EPS = 0.05;
+
   function meterTick() {
     requestAnimationFrame(meterTick);
     if (!engine.ctx) return;
     const playing = !!store.playing;
-    const allStrips = [...trackStrips, ...busStrips];
-    if (masterStrip) allStrips.push(masterStrip);
-    allStrips.forEach((strip) => {
+
+    // While idle + stopped + no user drag, meter + fader-live-read loops
+    // have nothing to do. Skip the per-frame work entirely.
+    if (!playing && _metersIdle && !_dragStrip) return;
+
+    let anyNonZero = false;
+    for (const strip of _allStrips) {
+      const lEl = strip._meterL;
+      const rEl = strip._meterR;
+      if (!lEl || !rEl) continue;
       const a = analysers.get(strip);
-      const lEl = strip.querySelector('.fader-meter--l');
-      const rEl = strip.querySelector('.fader-meter--r');
-      if (!lEl || !rEl) return;
       let target = 0;
       if (a && playing) {
         const rms = rmsFromAnalyser(a);
@@ -668,25 +695,25 @@ export function initMixer(ctx) {
       levels.set(strip, { l: nl, r: nr });
       lEl.style.height = nl.toFixed(1) + '%';
       rEl.style.height = nr.toFixed(1) + '%';
-    });
+      if (nl > METER_IDLE_EPS || nr > METER_IDLE_EPS) anyNonZero = true;
+    }
+    _metersIdle = !anyNonZero && !playing;
 
     // Live-read fader from channel.gain.gain.value during playback so
     // automation ramps drive the visible fader position. While the user
     // is dragging a strip (_dragStrip), they take control back — we skip
     // the live read for that strip and let their drag value stand.
     if (playing) {
-      trackStrips.forEach((strip) => {
-        if (strip === _dragStrip) return;
+      for (const strip of trackStrips) {
+        if (strip === _dragStrip) continue;
         const ch = channelForStrip(strip);
-        if (!ch || !ch.gain) return;
+        if (!ch || !ch.gain) continue;
         // If the user-facing value was forced to 0 by mute, read the
         // baseline instead so the fader doesn't collapse.
         const live = ch.muted ? (ch._preMuteGain ?? 0) : ch.gain.gain.value;
-        const capEl = strip.querySelector('.fader-cap');
-        const dbEl  = strip.querySelector('.channel-strip__db');
-        if (capEl) capEl.style.bottom = gainToPct(live).toFixed(1) + '%';
-        if (dbEl)  dbEl.textContent   = formatDb(gainToDb(live));
-      });
+        if (strip._cap)  strip._cap.style.bottom  = gainToPct(live).toFixed(1) + '%';
+        if (strip._dbEl) strip._dbEl.textContent  = formatDb(gainToDb(live));
+      }
       // Selected track's inspector volume knob also mirrors the live
       // gain. Emit so the inspector can update without a render cycle.
       const selIdx = store.selectedTrack;
@@ -699,6 +726,9 @@ export function initMixer(ctx) {
       }
     }
   }
+
+  // Any transport start wakes the meter loop.
+  store.on('transport', () => { if (store.playing) _metersIdle = false; });
 
   // On drag-start we ask the audio mixer to cancel any scheduled ramps
   // on this channel so the user's drag isn't immediately undone by the

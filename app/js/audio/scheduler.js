@@ -41,10 +41,7 @@ export function initScheduler({ store, sampler, mixer, engine }) {
   // looping + on-the-fly edits. On transport:stop we cancel scheduled
   // values so the automated params don't get left stuck at their last
   // breakpoint.
-  const AUTOMATION_KEYS = [
-    'volume', 'pan', 'sendA', 'sendB',
-    'fxReverb', 'fxDelay', 'fxEqLow', 'fxEqMid', 'fxEqHigh',
-  ];
+
   // Baseline registry keyed by `${trackIdx}:${paramKey}` so we can
   // restore each automated param to its pre-automation value on stop.
   // For volume we prefer `channel._preMuteGain` (which mixer keeps
@@ -96,12 +93,26 @@ export function initScheduler({ store, sampler, mixer, engine }) {
     }
   }
 
+  // Index of arrangement clips by trackIndex. Rebuilt on structural edits,
+  // read on every beat — avoids the O(tracks × clips) scan per 16th-note.
+  let _clipsByTrack = [];
+  function rebuildClipsByTrack() {
+    const arrangement = store.data.arrangement || [];
+    _clipsByTrack = [];
+    for (const clip of arrangement) {
+      const t = clip?.trackIndex;
+      if (typeof t !== 'number' || t < 0) continue;
+      (_clipsByTrack[t] ??= []).push(clip);
+    }
+  }
+
   // Preload whatever is already in the project (engineReady fires after
   // the project load handler, so 'loaded' may have already passed).
   sampler.preloadProject().catch((err) =>
     console.warn('[scheduler] preloadProject failed', err)
   );
   precacheAudioClips();
+  rebuildClipsByTrack();
 
   // Refresh the sampler cache whenever arrangement / patterns / tracks
   // change. Sampler.load() is a no-op for already-cached refs.
@@ -113,6 +124,7 @@ export function initScheduler({ store, sampler, mixer, engine }) {
     }
     if (path === 'arrangement') {
       precacheAudioClips();
+      rebuildClipsByTrack();
     }
   });
 
@@ -122,12 +134,12 @@ export function initScheduler({ store, sampler, mixer, engine }) {
       console.warn('[scheduler] preloadProject failed', err)
     );
     precacheAudioClips();
+    rebuildClipsByTrack();
   });
 
   // Core scheduling — fires per 16th-note beat from the engine.
   store.on('beat', ({ beat, time }) => {
     const tracks = store.data.tracks || [];
-    const arrangement = store.data.arrangement || [];
     const patterns = store.data.patterns || [];
     // P3 #11 — honor tempo changes at playback time. `beat` is the current
     // 16th-note step; bpmAtBeat looks up the active tempo entry. On every
@@ -149,12 +161,14 @@ export function initScheduler({ store, sampler, mixer, engine }) {
       // Automation — schedule a 16th-note ramp on every automated
       // AudioParam every tick. Reading only the current + next step's
       // value keeps this O(points) per tick without planning the full
-      // arrangement ahead of time.
+      // arrangement ahead of time. Iterating `for..in` on `automation`
+      // (instead of the full 9-key registry) means tracks with no
+      // automation pay zero per-tick cost.
       const automation = track.automation;
       if (automation && typeof automation === 'object') {
         const curBeat = beat / 4;                      // step -> quarter notes
         const nextBeat = (beat + 1) / 4;
-        for (const paramKey of AUTOMATION_KEYS) {
+        for (const paramKey in automation) {
           const autoPts = automation[paramKey];
           if (!Array.isArray(autoPts) || autoPts.length === 0) continue;
           const param = mixer.getAutomationParam(t, paramKey);
@@ -176,10 +190,9 @@ export function initScheduler({ store, sampler, mixer, engine }) {
         }
       }
 
-      for (const clip of arrangement) {
-        if (clip.trackIndex !== t) continue;
-        // Per-clip mute (phase 2b data, phase 4 scheduler) — silence
-        // this entry regardless of type without affecting siblings.
+      const clips = _clipsByTrack[t];
+      if (!clips) continue;
+      for (const clip of clips) {
         if (clip.muted === true) continue;
 
         // ── Audio clips (phase 3b) ──────────────────────────────
