@@ -53,6 +53,44 @@ async function ensureAudio() {
 // ──────────────────────────────────────────────────────────────────
 const DEFAULT_PROJECT = 'default';
 
+// Last-known mtime of project.json as the browser saw it. Used to ignore
+// SSE `project-updated` events caused by our own PUTs — only reloads when
+// the change originated elsewhere (CLI edit, other browser tab, etc).
+let _selfSavedMtimeNs = null;
+let _unsubscribeProject = null;
+
+// Wire a project as the active session: sets the store, installs an
+// autosave fn that records its own mtime, and opens an SSE subscription
+// for live-reload on out-of-band edits (CLI, other tab). Shared by the
+// boot-path and the project-picker, so the picker can switch projects
+// without duplicating the plumbing.
+async function loadProject(name) {
+  const data = await api.getProject(name);
+  audioCache.clear();
+  store.load(name, data);
+  store.setSaveFn(async (d) => {
+    const res = await api.saveProject(name, d);
+    if (res && res.mtime_ns != null) _selfSavedMtimeNs = res.mtime_ns;
+    return res;
+  });
+
+  if (_unsubscribeProject) { _unsubscribeProject(); _unsubscribeProject = null; }
+  _unsubscribeProject = api.subscribeProject(name, async (msg) => {
+    if (msg.type !== 'project-updated') return;
+    if (msg.mtime_ns != null && msg.mtime_ns === _selfSavedMtimeNs) return;
+    try {
+      const fresh = await api.getProject(name);
+      store.load(name, fresh);
+      console.info(`[bassmash] external edit picked up for "${name}"`);
+    } catch (e) {
+      console.warn('[bassmash] external reload failed', e);
+    }
+  });
+
+  console.info(`[bassmash] loaded project "${name}" · ${data.tracks?.length || 0} tracks`);
+  return data;
+}
+
 async function loadInitialProject() {
   let names;
   try { names = await api.listProjects(); }
@@ -65,10 +103,7 @@ async function loadInitialProject() {
     );
     name = DEFAULT_PROJECT;
   }
-  const data = await api.getProject(name);
-  store.load(name, data);
-  store.setSaveFn((d) => api.saveProject(name, d));
-  console.info(`[bassmash] loaded project "${name}" · ${data.tracks?.length || 0} tracks`);
+  await loadProject(name);
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -88,7 +123,7 @@ function startRenderLoop() {
 // Boot
 // ──────────────────────────────────────────────────────────────────
 async function boot() {
-  const ctx = { store, api, engine, mixer, sampler, ensureAudio };
+  const ctx = { store, api, engine, mixer, sampler, ensureAudio, loadProject };
 
   // Restore last-used tool before toolbar initializes (it reads store.currentTool).
   try {
@@ -151,4 +186,4 @@ if (document.readyState === 'loading') {
   boot();
 }
 
-window.bassmash = { store, api, engine, mixer, ensureAudio };
+window.bassmash = { store, api, engine, mixer, ensureAudio, loadProject };

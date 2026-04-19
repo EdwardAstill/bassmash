@@ -400,3 +400,28 @@ async def test_update_project_writes_via_store(client, projects_dir, monkeypatch
 
     assert len(calls) >= 2, "routes.py should delegate project writes to cli.store"
     assert any(name == "atom" and data.get("bpm") == 180 for name, data in calls)
+
+
+# ---------- SSE project-events stream ----------
+
+@pytest.mark.asyncio
+async def test_update_project_returns_mtime(client, projects_dir):
+    await client.post("/api/projects", json={"name": "sse-put"})
+    resp = await client.put("/api/projects/sse-put", json={"bpm": 150})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "saved"
+    assert isinstance(body.get("mtime_ns"), int) and body["mtime_ns"] > 0
+
+
+@pytest.mark.asyncio
+async def test_project_events_missing_project_404(client, projects_dir):
+    async with client.stream("GET", "/api/projects/ghost/events") as resp:
+        assert resp.status_code == 404
+
+
+# NOTE: the `project-updated` SSE flow is exercised by the headless browser
+# walkthrough, not here — in-process ASGI streaming with a concurrent PUT is
+# brittle to test reliably without a real HTTP loop. The PUT mtime payload
+# above and the 404 branch cover the parts of the endpoint that aren't
+# wall-clock-dependent.

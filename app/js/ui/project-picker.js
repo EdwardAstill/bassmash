@@ -278,16 +278,14 @@ async function handleLoad(name) {
   if (name === store.projectName) { hideDialog(); return; }
   setError(null);
   try {
-    const data = await api.getProject(name);
-    // Reuse the exact same wiring main.js does for the initial load.
-    // Clear the audio-cache so buffers from the old project don't leak
-    // keyed by old URLs (audioUrl embeds projectName → new project's
-    // same-named files would otherwise miss the cache anyway, but stale
-    // entries pile up).
-    try { audioCache.clear(); } catch (_) {}
-    store.load(name, data);
-    store.setSaveFn((d) => api.saveProject(name, d));
-    console.info(`[project-picker] loaded "${name}" · ${data.tracks?.length || 0} tracks`);
+    if (_loadProject) await _loadProject(name);
+    else {
+      // Fallback — main.js didn't inject loadProject. Best-effort direct load.
+      const data = await api.getProject(name);
+      try { audioCache.clear(); } catch (_) {}
+      store.load(name, data);
+      store.setSaveFn((d) => api.saveProject(name, d));
+    }
     hideDialog();
   } catch (err) {
     console.error('[project-picker] load failed', err);
@@ -326,8 +324,14 @@ function escapeHtml(s) {
 // ──────────────────────────────────────────────────────────────────
 // Public: wire File menu items and expose imperative openers.
 // ──────────────────────────────────────────────────────────────────
-export function initProjectPicker() {
+// Set by initProjectPicker so handleLoad/handleCreate can delegate the
+// full "load project + wire autosave + open SSE subscription" dance to
+// main.js's shared loadProject helper.
+let _loadProject = null;
+
+export function initProjectPicker(ctx = {}) {
   injectStyle();
+  _loadProject = ctx.loadProject || null;
 
   const found = ensureFilePopover();
   if (!found) {

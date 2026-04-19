@@ -107,4 +107,16 @@ export const api = {
     }
     return res.json(); // { deleted: filename }
   },
+
+  // Subscribe to server-sent events about a project. Fires `onMessage` with
+  // the parsed JSON payload for every event (type: hello | project-updated |
+  // project-deleted). Returns an unsubscribe function.
+  subscribeProject(name, onMessage) {
+    const es = new EventSource(`${BASE}/projects/${encodeURIComponent(name)}/events`);
+    es.onmessage = (ev) => {
+      try { onMessage(JSON.parse(ev.data)); } catch (_) { /* ignore malformed */ }
+    };
+    es.onerror = () => { /* browser auto-reconnects */ };
+    return () => es.close();
+  },
 };

@@ -1,10 +1,11 @@
+import asyncio
 import json
 import re
 import shutil
 import subprocess
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from cli import store
@@ -121,7 +122,39 @@ def delete_project(name: str):
 def update_project(name: str, body: dict):
     _project_dir(name)  # 404 if missing
     _write_project(name, body)
-    return {"status": "saved"}
+    pfile = PROJECTS_DIR / name / "project.json"
+    return {"status": "saved", "mtime_ns": pfile.stat().st_mtime_ns}
+
+
+# Server-sent events: polls project.json's mtime and pushes a tiny JSON
+# message whenever it changes. Lets the CLI (which writes files directly)
+# and the browser (which PUTs via the API) stay in sync — any edit by
+# either side triggers a reload in every connected browser tab.
+@router.get("/projects/{name}/events")
+async def project_events(name: str, request: Request):
+    _project_dir(name)
+    pfile = PROJECTS_DIR / name / "project.json"
+
+    async def stream():
+        try:
+            last_mtime = pfile.stat().st_mtime_ns
+        except FileNotFoundError:
+            last_mtime = None
+        yield f"data: {json.dumps({'type': 'hello', 'name': name, 'mtime_ns': last_mtime})}\n\n"
+        while True:
+            if await request.is_disconnected():
+                return
+            try:
+                m = pfile.stat().st_mtime_ns
+            except FileNotFoundError:
+                yield f"data: {json.dumps({'type': 'project-deleted', 'name': name})}\n\n"
+                return
+            if last_mtime is not None and m != last_mtime:
+                yield f"data: {json.dumps({'type': 'project-updated', 'name': name, 'mtime_ns': m})}\n\n"
+            last_mtime = m
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 # --- samples ---
