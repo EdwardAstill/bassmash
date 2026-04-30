@@ -8,26 +8,26 @@ from typing import Annotated
 from fastmcp import FastMCP
 
 mcp = FastMCP(
-    "Bassmash",
+    "M8S",
     instructions=(
-        "Music production MCP server for Bassmash DAW. "
+        "Music production MCP server for M8S DAW. "
         "Use generate_beat to create beats from text descriptions. "
         "Use replicate_from_audio to analyze an MP3 and recreate its beat pattern. "
-        "Projects live in $BASSMASH_PROJECTS_DIR (default ~/bassmash-projects/) "
-        "and are hot-reloaded in any open Bassmash browser tab within ~500ms."
+        "Projects live in $M8S_PROJECTS_DIR (default ~/m8s-projects/) "
+        "and are hot-reloaded in any open M8S browser tab within ~500ms."
     ),
 )
 
 
 def _projects_dir() -> Path:
-    """Honor $BASSMASH_PROJECTS_DIR so the MCP reads/writes the same directory
+    """Honor $M8S_PROJECTS_DIR so the MCP reads/writes the same directory
     as cli/store.py and the FastAPI backend."""
-    override = os.environ.get("BASSMASH_PROJECTS_DIR")
-    return Path(override).expanduser() if override else Path.home() / "bassmash-projects"
+    override = os.environ.get("M8S_PROJECTS_DIR")
+    return Path(override).expanduser() if override else Path.home() / "m8s-projects"
 
 
 # Kept for any legacy caller; prefer _projects_dir() at call time so tests and
-# users changing BASSMASH_PROJECTS_DIR at runtime are reflected immediately.
+# users changing M8S_PROJECTS_DIR at runtime are reflected immediately.
 PROJECTS_DIR = _projects_dir()
 
 KIT_SAMPLES = {
@@ -160,7 +160,7 @@ def _build_project(
     add_808: bool = False,
     bars: int = 4,
 ) -> dict:
-    """Build a complete Bassmash project dict."""
+    """Build a complete M8S project dict."""
     steps = [
         {"name": "Kick", "sampleRef": kick_sample, "cells": [bool(c) for c in kick_pattern], "velocities": [100 if c else 0 for c in kick_pattern]},
         {"name": "Snare", "sampleRef": snare_sample, "cells": [bool(c) for c in snare_pattern], "velocities": [100 if c else 0 for c in snare_pattern]},
@@ -228,7 +228,7 @@ def generate_beat(
     project_name: Annotated[str, "Name for the project (used as folder name)"],
     bars: Annotated[int, "Number of bars to generate"] = 4,
 ) -> str:
-    """Generate a beat from a text description and save it as a Bassmash project.
+    """Generate a beat from a text description and save it as a M8S project.
 
     Supports genres: trap, boom bap, drill, lofi.
     Mention specific elements like '808s', 'hi-hat rolls', 'heavy kicks', 'sparse', 'minimal'.
@@ -281,7 +281,7 @@ def replicate_from_audio(
     project_name: Annotated[str, "Name for the output project"],
     bars: Annotated[int, "Number of bars to extract from the beginning"] = 4,
 ) -> str:
-    """Analyze an audio file and create a Bassmash project that approximates its beat pattern.
+    """Analyze an audio file and create a M8S project that approximates its beat pattern.
 
     Detects tempo, extracts onset patterns, and maps them to kick/snare/hihat rows.
     Works best with drum-heavy tracks. Supports MP3 and WAV.
@@ -382,7 +382,7 @@ def replicate_from_audio(
         f"Created project '{project_name}' at {path}",
         f"Pattern: {kick_hits} kicks, {snare_hits} snares, {hihat_hits} hihats per bar",
         f"Bars: {bars}",
-        "Open in Bassmash to hear and edit the replicated beat.",
+        "Open in M8S to hear and edit the replicated beat.",
     ])
 
 
@@ -395,7 +395,7 @@ def _load_project(name: str) -> dict | None:
 
 @mcp.tool(annotations={"readOnlyHint": True})
 def list_projects() -> str:
-    """List all Bassmash projects in $BASSMASH_PROJECTS_DIR."""
+    """List all M8S projects in $M8S_PROJECTS_DIR."""
     root = _projects_dir()
     if not root.exists():
         return "No projects directory found."
@@ -416,7 +416,7 @@ def list_projects() -> str:
 def get_project(
     project_name: Annotated[str, "Name of the project to inspect"],
 ) -> str:
-    """Get full details of a Bassmash project including tracks, patterns, and arrangement."""
+    """Get full details of a M8S project including tracks, patterns, and arrangement."""
     proj = _load_project(project_name)
     if not proj:
         return f"Project '{project_name}' not found."

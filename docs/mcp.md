@@ -1,8 +1,8 @@
 # MCP Server — AI Tool Catalog
 
-`mcp-server/server.py` exposes Bassmash's project operations as Model Context Protocol tools. Claude (or any MCP client) composes, edits, and inspects projects with structured tool calls instead of raw file edits.
+`mcp-server/server.py` exposes M8S's project operations as Model Context Protocol tools. Claude (or any MCP client) composes, edits, and inspects projects with structured tool calls instead of raw file edits.
 
-Every write lands in the same `$BASSMASH_PROJECTS_DIR/<name>/project.json` via the same atomic write pattern `cli/store.py` uses (`tempfile + fsync + os.replace`). Any open browser tab reloads within ~500 ms via the SSE endpoint.
+Every write lands in the same `$M8S_PROJECTS_DIR/<name>/project.json` via the same atomic write pattern `cli/store.py` uses (`tempfile + fsync + os.replace`). Any open browser tab reloads within ~500 ms via the SSE endpoint.
 
 ---
 
@@ -21,20 +21,20 @@ Add to your MCP client config (Claude Desktop, Claude Code, etc.):
 ```json
 {
   "mcpServers": {
-    "bassmash-mcp": {
+    "m8s-mcp": {
       "command": "uv",
-      "args": ["--directory", "/absolute/path/to/bassmash/mcp-server", "run", "python", "server.py"],
+      "args": ["--directory", "/absolute/path/to/m8s/mcp-server", "run", "python", "server.py"],
       "env": {
-        "BASSMASH_PROJECTS_DIR": "/home/you/bassmash-projects"
+        "M8S_PROJECTS_DIR": "/home/you/m8s-projects"
       }
     }
   }
 }
 ```
 
-Restart the client. Tools show up as `mcp__bassmash-mcp__<name>`.
+Restart the client. Tools show up as `mcp__m8s-mcp__<name>`.
 
-The `env.BASSMASH_PROJECTS_DIR` is optional — defaults to `~/bassmash-projects`. If you set a custom path in the backend (e.g. when running tests against a temp dir), use the same value here so the MCP reads/writes the same files.
+The `env.M8S_PROJECTS_DIR` is optional — defaults to `~/m8s-projects`. If you set a custom path in the backend (e.g. when running tests against a temp dir), use the same value here so the MCP reads/writes the same files.
 
 ---
 
@@ -46,7 +46,7 @@ All tools are `stdio` functions returning a human-readable string (success or er
 
 #### `list_projects()`
 
-List every project in `$BASSMASH_PROJECTS_DIR` with track count and BPM.
+List every project in `$M8S_PROJECTS_DIR` with track count and BPM.
 
 ```
 Found 7 project(s):
@@ -61,7 +61,7 @@ Full dump of `project.json` — tracks, patterns, arrangement, markers, tempo ch
 
 #### `list_kit_samples()`
 
-Every sample reference under `$BASSMASH_KIT_DIR`, grouped by category (Kicks / Snares / Hi-hats / 808 Bass / Percussion). Use when picking a `sample_ref` so you don't guess a missing filename.
+Every sample reference under `$M8S_KIT_DIR`, grouped by category (Kicks / Snares / Hi-hats / 808 Bass / Percussion). Use when picking a `sample_ref` so you don't guess a missing filename.
 
 ---
 
@@ -329,11 +329,11 @@ All three end at `cli/store.py`'s atomic write, so mixing freely is safe.
 1. Add a `@mcp.tool()` function to `mcp-server/server.py`. Use `Annotated[type, "description"]` for every arg so the schema surfaces in clients.
 2. Route every write through `_save_project(name, proj)` — it's atomic and creates `samples/` + `audio/` dirs.
 3. Keep invariants identical to `cli/project_ops.py` where shapes overlap. If you're adding a new shape (e.g. new automation param), mirror it in the frontend (`scheduler.js`, `offline-render.js`, `mixer.js::getAutomationParam`) and document it above.
-4. Test end-to-end against a throwaway `BASSMASH_PROJECTS_DIR=/tmp/...` so you don't pollute your real projects.
+4. Test end-to-end against a throwaway `M8S_PROJECTS_DIR=/tmp/...` so you don't pollute your real projects.
 5. Update this doc's tool catalog table + signatures.
 
 ## Known gaps
 
-- No tool for audio-clip arrangement placement (only pattern clips). Use `bassmash-cli arrange add-audio` for those.
+- No tool for audio-clip arrangement placement (only pattern clips). Use `m8s-cli arrange add-audio` for those.
 - No tool for uploading sample files — drop them into `<project>/samples/` or `<project>/audio/` manually, or use the browser File tab.
 - Bus FX parameters (bus A reverb wet, bus B delay time / feedback / wet) are tweakable via the Mixer's bus-strip knobs only — no MCP tool yet. Planned.

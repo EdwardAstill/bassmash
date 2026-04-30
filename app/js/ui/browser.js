@@ -26,7 +26,7 @@ export function initBrowser(container) {
 
     container.querySelectorAll('.browser-item[data-ref]').forEach(el => {
       el.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/bassmash-audio-ref', el.dataset.ref);
+        e.dataTransfer.setData('text/m8s-audio-ref', el.dataset.ref);
         e.dataTransfer.effectAllowed = 'copy';
         el.classList.add('dragging');
       });

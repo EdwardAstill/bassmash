@@ -13,7 +13,7 @@ def client():
 async def test_index_served(client):
     resp = await client.get("/")
     assert resp.status_code == 200
-    assert "Bassmash" in resp.text
+    assert "M8S" in resp.text
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def projects_dir(tmp_path, monkeypatch):
     """Point PROJECTS_DIR + cli.store at a temp dir for the test's duration."""
     from server import routes
     monkeypatch.setattr(routes, "PROJECTS_DIR", tmp_path)
-    monkeypatch.setenv("BASSMASH_PROJECTS_DIR", str(tmp_path))
+    monkeypatch.setenv("M8S_PROJECTS_DIR", str(tmp_path))
     return tmp_path
 
 
@@ -109,7 +109,7 @@ def kit_dir(tmp_path, monkeypatch):
     (kit / "kick-punchy.wav").write_bytes(b"RIFF fake wav")
     (kit / "snare-crisp.wav").write_bytes(b"RIFF fake wav")
     monkeypatch.setattr(routes, "KIT_DIR", kit)
-    monkeypatch.setenv("BASSMASH_KIT_DIR", str(kit))
+    monkeypatch.setenv("M8S_KIT_DIR", str(kit))
     return kit
 
 

@@ -1,4 +1,4 @@
-// Bassmash — boot entry.
+// M8S — boot entry.
 // Responsibilities:
 //   1. Load or create a project via the FastAPI backend
 //   2. Initialize AudioContext on first user gesture (browser autoplay policy)
@@ -43,7 +43,7 @@ async function ensureAudio() {
     if (engine.ctx.state === 'suspended') await engine.ctx.resume();
     _audioReady = true;
     store.emit('engineReady');
-    console.info('[bassmash] audio ready · sr=' + engine.ctx.sampleRate);
+    console.info('[m8s] audio ready · sr=' + engine.ctx.sampleRate);
   })();
   return _audioInitPromise;
 }
@@ -81,25 +81,25 @@ async function loadProject(name) {
     try {
       const fresh = await api.getProject(name);
       store.load(name, fresh);
-      console.info(`[bassmash] external edit picked up for "${name}"`);
+      console.info(`[m8s] external edit picked up for "${name}"`);
     } catch (e) {
-      console.warn('[bassmash] external reload failed', e);
+      console.warn('[m8s] external reload failed', e);
     }
   });
 
-  console.info(`[bassmash] loaded project "${name}" · ${data.tracks?.length || 0} tracks`);
+  console.info(`[m8s] loaded project "${name}" · ${data.tracks?.length || 0} tracks`);
   return data;
 }
 
 async function loadInitialProject() {
   let names;
   try { names = await api.listProjects(); }
-  catch (e) { console.warn('[bassmash] listProjects failed', e); names = []; }
+  catch (e) { console.warn('[m8s] listProjects failed', e); names = []; }
 
   let name = names[0];
   if (!name) {
     await api.createProject(DEFAULT_PROJECT).catch((e) =>
-      console.warn('[bassmash] createProject failed', e)
+      console.warn('[m8s] createProject failed', e)
     );
     name = DEFAULT_PROJECT;
   }
@@ -127,11 +127,11 @@ async function boot() {
 
   // Restore last-used tool before toolbar initializes (it reads store.currentTool).
   try {
-    const saved = localStorage.getItem('bassmash.currentTool');
+    const saved = localStorage.getItem('m8s.currentTool');
     if (saved) store.currentTool = saved;
   } catch (e) { /* localStorage unavailable — ignore */ }
   store.on('toolChanged', (id) => {
-    try { localStorage.setItem('bassmash.currentTool', id); } catch (e) { /* ignore */ }
+    try { localStorage.setItem('m8s.currentTool', id); } catch (e) { /* ignore */ }
   });
 
   initHeader(ctx);
@@ -186,4 +186,4 @@ if (document.readyState === 'loading') {
   boot();
 }
 
-window.bassmash = { store, api, engine, mixer, ensureAudio, loadProject };
+window.m8s = { store, api, engine, mixer, ensureAudio, loadProject };

@@ -96,7 +96,7 @@ function setChip(chip, state, text) {
 }
 
 function safeFilename(s) {
-  return String(s || 'bassmash-export').replace(/[^\w\-.]+/g, '_');
+  return String(s || 'm8s-export').replace(/[^\w\-.]+/g, '_');
 }
 
 export function initExportMenu() {

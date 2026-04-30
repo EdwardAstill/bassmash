@@ -1,4 +1,4 @@
-# Bassmash Implementation Plan
+# M8S Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -101,7 +101,7 @@ router = APIRouter()
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bassmash</title>
+  <title>M8S</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -205,7 +205,7 @@ def client():
 async def test_index_served(client):
     resp = await client.get("/")
     assert resp.status_code == 200
-    assert "Bassmash" in resp.text
+    assert "M8S" in resp.text
 ```
 
 - [ ] **Step 6: Run test to verify it passes**
@@ -316,7 +316,7 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api")
 
-PROJECTS_DIR = Path.home() / "bassmash-projects"
+PROJECTS_DIR = Path.home() / "m8s-projects"
 
 
 def _ensure_projects_dir():
@@ -2686,7 +2686,7 @@ async function showProjectPicker() {
   `;
   dialog.innerHTML = `
     <div style="background:var(--bg-secondary);padding:24px;border-radius:8px;min-width:300px;">
-      <h2 style="color:var(--accent);margin-bottom:16px;">Bassmash</h2>
+      <h2 style="color:var(--accent);margin-bottom:16px;">M8S</h2>
       <div style="margin-bottom:16px;">
         <input id="new-project-name" placeholder="New project name..."
           style="width:100%;padding:8px;background:var(--bg-primary);border:1px solid var(--border);
@@ -2973,7 +2973,7 @@ if __name__ == '__main__':
 
 - [ ] **Step 2: Run the script to generate samples**
 
-Run: `cd /home/eastill/projects/bassmash && python3 scripts/generate-kit.py`
+Run: `cd /home/eastill/projects/m8s && python3 scripts/generate-kit.py`
 Expected: 14 .wav files in `kit/`
 
 - [ ] **Step 3: Commit**
@@ -2992,19 +2992,19 @@ git commit -m "feat: starter kit — synthesized drum and 808 samples"
 - [ ] **Step 1: Install server dependencies and start the server**
 
 ```bash
-cd /home/eastill/projects/bassmash/server
+cd /home/eastill/projects/m8s/server
 pip install -r requirements.txt
 ```
 
 - [ ] **Step 2: Run all server tests**
 
-Run: `cd /home/eastill/projects/bassmash/server && python -m pytest test_routes.py -v`
+Run: `cd /home/eastill/projects/m8s/server && python -m pytest test_routes.py -v`
 Expected: All PASS
 
 - [ ] **Step 3: Start the server and verify the app loads**
 
 ```bash
-cd /home/eastill/projects/bassmash/server
+cd /home/eastill/projects/m8s/server
 python -m uvicorn main:app --port 8000 &
 sleep 2
 curl -s http://localhost:8000/ | head -5
@@ -3012,7 +3012,7 @@ curl -s http://localhost:8000/api/kit | python -m json.tool
 kill %1
 ```
 
-Expected: HTML page with "Bassmash" in title, and kit listing JSON with sample filenames.
+Expected: HTML page with "M8S" in title, and kit listing JSON with sample filenames.
 
 - [ ] **Step 4: Add .gitignore and commit**
 

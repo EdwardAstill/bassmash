@@ -1,4 +1,4 @@
-# Bassmash — Session Checkpoint 2026-04-19 (post-delivery)
+# M8S — Session Checkpoint 2026-04-19 (post-delivery)
 
 Supersedes the earlier checkpoint that listed P1–P3 as pending.
 
@@ -41,7 +41,7 @@ All P1/P2/P3 items from the prior checkpoint are now delivered, plus a follow-up
 
 ### Post-P3 follow-up wave
 - **Live sync** — SSE endpoint `GET /api/projects/{name}/events` polls `project.json` mtime every 500 ms and emits `project-updated`. Browser re-fetches and reloads on change; its own PUT mtime is tagged so autosave doesn't trigger self-reload. CLI + MCP edits surface in any open tab without manual refresh.
-- **MCP server enhancements** — 22 tools (was 16). New: `rename_track`, `set_track_sends`, `set_track_automation`, `set_synth_params`, `set_tempo_changes`, `set_markers`. `_save_project` is now atomic (tempfile + fsync + os.replace) and honors `$BASSMASH_PROJECTS_DIR`.
+- **MCP server enhancements** — 22 tools (was 16). New: `rename_track`, `set_track_sends`, `set_track_automation`, `set_synth_params`, `set_tempo_changes`, `set_markers`. `_save_project` is now atomic (tempfile + fsync + os.replace) and honors `$M8S_PROJECTS_DIR`.
 - **Synth workbench tab** (`app/js/ui/workbench/synth-panel.js`) — 5th workbench tab. Waveform picker (4 single-period glyph buttons), filter type + cutoff + Q knobs, interactive 240×90 ADSR graph with draggable peak / sustain-knee / release handles. Inspector drops to a one-line summary.
 - **Transport polish** — `⟲` loop button lights up when active. Loop OFF + past-end-of-arrangement auto-stops the transport (previously ticked silently forever). On loop wrap, any in-flight audio clip `BufferSource` is hard-stopped so clips with `lengthBeats: 0` don't bleed past the loop point.
 - **Menu overlay fix** — File dropdown was clipped by zone `overflow: hidden`. Both `export-menu.js` and `project-picker.js` now append the popover to `document.body`, `position: fixed`, `z-index: 1200`, with `top/left` computed from the button's bounding rect.
@@ -58,7 +58,7 @@ app/
   index.html                 9-zone Dock-style layout
   css/style.css              design tokens, per-track `data-color` palette
   js/
-    main.js                  boot: audio init, project load, zone wiring, window.bassmash shim
+    main.js                  boot: audio init, project load, zone wiring, window.m8s shim
     state.js                 StateStore + event bus (change/loaded/saved/saving/saveFailed/beat/tick/…)
     api.js                   typed HTTP client
     undo.js                  50-deep JSON snapshot stack, 250 ms debounce
@@ -102,7 +102,7 @@ server/
 cli/
   store.py                   single source of truth for disk IO (atomic writes, env overrides)
   project_ops.py             pure-function mutations (bpm, tracks, patterns, arrangement)
-  main.py                    Typer CLI — bassmash-cli project/bpm/track/pattern/arrange/…
+  main.py                    Typer CLI — m8s-cli project/bpm/track/pattern/arrange/…
   analysis.py                librosa-based BPM/key analysis
   test_store.py              17 tests
   test_project_ops.py        35 tests
@@ -111,12 +111,12 @@ cli/
 
 ### Filesystem layout (shared by CLI + server)
 ```
-$BASSMASH_PROJECTS_DIR/<name>/
+$M8S_PROJECTS_DIR/<name>/
 ├── project.json             whole serialized project
 ├── samples/                 drum one-shots
 ├── audio/                   uploaded audio (.mp3 .wav .ogg .flac .aif .aiff)
 └── export.mp3               last MP3 render
-$BASSMASH_KIT_DIR/           built-in drum kit served at kit://<filename>
+$M8S_KIT_DIR/           built-in drum kit served at kit://<filename>
 ```
 
 ### Store event bus
@@ -139,7 +139,7 @@ $BASSMASH_KIT_DIR/           built-in drum kit served at kit://<filename>
 
 ## Known deferred items (not bugs, scoped-out during implementation)
 
-- **Audio-clip placement via MCP** — MCP `set_arrangement` only handles pattern clips. Audio-clip placement still needs `bassmash-cli arrange add-audio` or a raw edit.
+- **Audio-clip placement via MCP** — MCP `set_arrangement` only handles pattern clips. Audio-clip placement still needs `m8s-cli arrange add-audio` or a raw edit.
 - **Bus FX parameters via MCP** — bus A wet / bus B wet / delay time / feedback are tweakable via the browser's bus-strip knobs only. No MCP tool yet — the `busMix` struct is on disk but not addressable.
 - **Legacy drum-pattern shape question** — `pattern.steps[]` with per-row `sampleRef` vs one-sample-per-track; open design question.
 - **Undo across `store.load` boundary** — history resets on load by design. May want a "restore session" path.
@@ -164,7 +164,7 @@ $BASSMASH_KIT_DIR/           built-in drum kit served at kit://<filename>
 ## Dev workflow
 
 ```bash
-cd ~/projects/bassmash
+cd ~/projects/m8s
 bun run dev              # uvicorn :8000, mounts app/ as static
 uv run pytest            # backend: 117 green, ~1s
 ```

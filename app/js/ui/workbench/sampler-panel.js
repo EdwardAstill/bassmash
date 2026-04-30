@@ -3,7 +3,7 @@
 // Shows one pad per row in the selected drum pattern's `pattern.steps[]`.
 // Per pad:
 //   · sample name label (click = open picker of kit + project samples)
-//   · drop target for `application/x-bassmash-sample` from the browser
+//   · drop target for `application/x-m8s-sample` from the browser
 //   · gain knob (0..2, default 1) — writes row.gain
 //   · pitch knob (-12..+12 semitones, default 0) — writes row.pitch
 //   · loop toggle (one-shot vs loop) — writes row.loop
@@ -223,14 +223,14 @@ export function initSamplerPanel({ rootEl }) {
       pad.addEventListener('dragover', (e) => {
         if (!e.dataTransfer) return;
         const types = Array.from(e.dataTransfer.types || []);
-        if (!types.includes('application/x-bassmash-sample')) return;
+        if (!types.includes('application/x-m8s-sample')) return;
         e.preventDefault();
         pad.dataset.drop = 'over';
       });
       pad.addEventListener('dragleave', () => { delete pad.dataset.drop; });
       pad.addEventListener('drop', (e) => {
         delete pad.dataset.drop;
-        const raw = e.dataTransfer?.getData('application/x-bassmash-sample');
+        const raw = e.dataTransfer?.getData('application/x-m8s-sample');
         if (!raw) return;
         e.preventDefault();
         try {

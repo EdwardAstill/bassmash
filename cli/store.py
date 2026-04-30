@@ -1,6 +1,6 @@
-"""Filesystem-direct access to Bassmash projects.
+"""Filesystem-direct access to M8S projects.
 
-Projects live at ``$BASSMASH_PROJECTS_DIR/<name>/`` (default ``~/bassmash-projects/``).
+Projects live at ``$M8S_PROJECTS_DIR/<name>/`` (default ``~/m8s-projects/``).
 This module owns every read and write — no HTTP, no server dependency.
 """
 from __future__ import annotations
@@ -22,14 +22,14 @@ DEFAULT_PROJECT: dict[str, Any] = {
 
 
 def projects_dir() -> Path:
-    override = os.environ.get("BASSMASH_PROJECTS_DIR")
+    override = os.environ.get("M8S_PROJECTS_DIR")
     if override:
         return Path(override).expanduser()
-    return Path.home() / "bassmash-projects"
+    return Path.home() / "m8s-projects"
 
 
 def kit_dir() -> Path:
-    override = os.environ.get("BASSMASH_KIT_DIR")
+    override = os.environ.get("M8S_KIT_DIR")
     if override:
         return Path(override).expanduser()
     # ``cli/store.py`` → repo is two parents up.

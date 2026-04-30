@@ -8,7 +8,7 @@ from cli import store
 
 @pytest.fixture
 def projects_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("BASSMASH_PROJECTS_DIR", str(tmp_path))
+    monkeypatch.setenv("M8S_PROJECTS_DIR", str(tmp_path))
     return tmp_path
 
 
@@ -16,18 +16,18 @@ def projects_root(tmp_path, monkeypatch):
 def kit_root(tmp_path, monkeypatch):
     kit = tmp_path / "kit"
     kit.mkdir()
-    monkeypatch.setenv("BASSMASH_KIT_DIR", str(kit))
+    monkeypatch.setenv("M8S_KIT_DIR", str(kit))
     return kit
 
 
 def test_projects_dir_env_override(tmp_path, monkeypatch):
-    monkeypatch.setenv("BASSMASH_PROJECTS_DIR", str(tmp_path / "weird"))
+    monkeypatch.setenv("M8S_PROJECTS_DIR", str(tmp_path / "weird"))
     assert store.projects_dir() == tmp_path / "weird"
 
 
 def test_projects_dir_default(monkeypatch):
-    monkeypatch.delenv("BASSMASH_PROJECTS_DIR", raising=False)
-    assert store.projects_dir() == Path.home() / "bassmash-projects"
+    monkeypatch.delenv("M8S_PROJECTS_DIR", raising=False)
+    assert store.projects_dir() == Path.home() / "m8s-projects"
 
 
 def test_create_and_list_project(projects_root):
@@ -149,7 +149,7 @@ def test_list_kit(kit_root):
 
 
 def test_list_kit_missing_dir_returns_empty(tmp_path, monkeypatch):
-    monkeypatch.setenv("BASSMASH_KIT_DIR", str(tmp_path / "missing"))
+    monkeypatch.setenv("M8S_KIT_DIR", str(tmp_path / "missing"))
     assert store.list_kit() == []
 
 

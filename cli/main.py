@@ -1,6 +1,6 @@
-"""Bassmash CLI — filesystem-direct project editor.
+"""M8S CLI — filesystem-direct project editor.
 
-Edits files under ``$BASSMASH_PROJECTS_DIR`` (default ``~/bassmash-projects``).
+Edits files under ``$M8S_PROJECTS_DIR`` (default ``~/m8s-projects``).
 Does not talk to the backend. The backend serves the same files to the browser;
 when this CLI changes a file, reload the project in the browser to see it.
 """
@@ -20,8 +20,8 @@ from dataclasses import asdict as _asdict
 T = TypeVar("T")
 
 app = typer.Typer(
-    name="bassmash-cli",
-    help="Filesystem-direct editor for Bassmash projects.",
+    name="m8s-cli",
+    help="Filesystem-direct editor for M8S projects.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -399,7 +399,7 @@ def audio_add(project: str, file: Path = typer.Argument(..., exists=True, readab
 def kit_list() -> None:
     files = store.list_kit()
     if not files:
-        typer.echo("(no kit samples found — set BASSMASH_KIT_DIR?)")
+        typer.echo("(no kit samples found — set M8S_KIT_DIR?)")
         return
     for f in files:
         typer.echo(f)
@@ -562,7 +562,7 @@ def analyse_compare(
 
 @app.command("version")
 def version() -> None:
-    typer.echo("bassmash-cli 0.1.0 (filesystem-direct)")
+    typer.echo("m8s-cli 0.1.0 (filesystem-direct)")
 
 
 @app.command("where")

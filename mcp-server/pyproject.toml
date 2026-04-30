@@ -1,7 +1,7 @@
 [project]
-name = "bassmash-mcp"
+name = "m8s-mcp"
 version = "0.1.0"
-description = "MCP server for Bassmash DAW — generate beats from prompts and replicate audio"
+description = "MCP server for M8S DAW — generate beats from prompts and replicate audio"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=3.0.0",
@@ -11,4 +11,4 @@ dependencies = [
 ]
 
 [project.scripts]
-bassmash-mcp = "server:main"
+m8s-mcp = "server:main"

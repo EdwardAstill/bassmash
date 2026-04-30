@@ -51,7 +51,7 @@ export function initArrangementDropTarget({ store, engine, api /* , mixer, sampl
   const playhead = timeline.querySelector('.playhead');
 
   function parsePayload(e) {
-    const raw = e.dataTransfer?.getData('application/x-bassmash-sample');
+    const raw = e.dataTransfer?.getData('application/x-m8s-sample');
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
   }
@@ -69,7 +69,7 @@ export function initArrangementDropTarget({ store, engine, api /* , mixer, sampl
 
       lane.addEventListener('dragover', (e) => {
         const types = e.dataTransfer?.types;
-        if (!types || !Array.from(types).includes('application/x-bassmash-sample')) {
+        if (!types || !Array.from(types).includes('application/x-m8s-sample')) {
           // Some browsers hide custom types during dragover; still accept conservatively.
         }
         e.preventDefault();

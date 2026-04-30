@@ -266,7 +266,7 @@ export function initBrowser(/* { store, api, engine, mixer, sampler, ensureAudio
       row.classList.add('tree-item--dragging');
       e.dataTransfer.effectAllowed = 'copy';
       e.dataTransfer.setData(
-        'application/x-bassmash-sample',
+        'application/x-m8s-sample',
         JSON.stringify({ ref: filename, name: filename, kind: 'audio' }),
       );
       e.dataTransfer.setData('text/plain', filename);
@@ -406,7 +406,7 @@ export function initBrowser(/* { store, api, engine, mixer, sampler, ensureAudio
       el.classList.add('tree-item--dragging');
       e.dataTransfer.effectAllowed = 'copy';
       e.dataTransfer.setData(
-        'application/x-bassmash-sample',
+        'application/x-m8s-sample',
         JSON.stringify({ ref, name, kind: 'sample' }),
       );
       e.dataTransfer.setData('text/plain', name);

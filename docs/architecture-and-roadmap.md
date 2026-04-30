@@ -1,4 +1,4 @@
-# Bassmash Architecture Critique & Roadmap
+# M8S Architecture Critique & Roadmap
 
 > **Historical document — kept for context.** This was written before the 9-zone UI rewrite and before the 2026-04-19 session that landed P1–P3. Repo layout and module names below are stale (references to `app/js/ui/topbar.js`, `timeline.js`, `mixer-panel.js`, `step-sequencer.js`, `app/js/audio/export.js`, `app/js/audio/waveform.js` — all deleted). For the current architecture snapshot, see [../NEXT_STEPS.md](../NEXT_STEPS.md). Some of the structural concerns below still apply (no frontend build/types/tests, no domain-model classes, no command layer for undo); others have been addressed.
 
@@ -11,7 +11,7 @@ Read [performance-plan.md](./performance-plan.md) first for audio concepts and t
 ## Table of contents
 
 1. [Executive summary](#1-executive-summary)
-2. [What Bassmash is today (architecture snapshot)](#2-what-bassmash-is-today-architecture-snapshot)
+2. [What M8S is today (architecture snapshot)](#2-what-m8s-is-today-architecture-snapshot)
 3. [Critical structural problems](#3-critical-structural-problems)
 4. [Target architecture](#4-target-architecture)
 5. [Roadmap — ten phases](#5-roadmap--ten-phases)
@@ -21,7 +21,7 @@ Read [performance-plan.md](./performance-plan.md) first for audio concepts and t
 
 ## 1. Executive summary
 
-Bassmash works. It has play, record, patterns, synths, samples, mixer, export, and even an MCP server for AI-assisted beat generation. For ~1,800 lines of JavaScript and ~200 lines of Python it is remarkably functional.
+M8S works. It has play, record, patterns, synths, samples, mixer, export, and even an MCP server for AI-assisted beat generation. For ~1,800 lines of JavaScript and ~200 lines of Python it is remarkably functional.
 
 It will not scale as-is. Five categories of structural problem will become blockers within the next handful of features:
 
@@ -35,12 +35,12 @@ Everything in this document is oriented around fixing those five things and then
 
 ---
 
-## 2. What Bassmash is today (architecture snapshot)
+## 2. What M8S is today (architecture snapshot)
 
 ### 2.1 Repo layout
 
 ```
-bassmash/
+m8s/
 ├── app/                    # Frontend (browser)
 │   ├── index.html          # Single page, four divs: toolbar, browser, channel rack, playlist, mixer
 │   ├── css/style.css
@@ -383,7 +383,7 @@ The core of the performance plan from [performance-plan.md](./performance-plan.m
 
 ### Phase 3 — Core DAW UX parity (the things every DAW has)
 
-Table stakes. Nothing here is exotic; their absence is what makes Bassmash feel like a toy.
+Table stakes. Nothing here is exotic; their absence is what makes M8S feel like a toy.
 
 - **F3-1. Keyboard shortcuts.** Space = play/stop, Delete = delete selection, Ctrl+A select all, Ctrl+S manual save, Ctrl+D duplicate, arrows nudge, +/- zoom. One `shortcuts.ts` module.
 - **F3-2. Selection model.** Single + multi + range. Marquee select. Selection is state, lives in the store.
@@ -490,7 +490,7 @@ Long-term. Mostly backend work.
 
 **Marker.** A named position in the song — intro, verse, chorus — usable for jump-to navigation.
 
-**MCP.** Model Context Protocol — a standard for exposing tools to AI assistants. Bassmash has an MCP server in `mcp-server/`.
+**MCP.** Model Context Protocol — a standard for exposing tools to AI assistants. M8S has an MCP server in `mcp-server/`.
 
 **MIDI.** Musical Instrument Digital Interface — a decades-old protocol for sending note-on / note-off / controller events between instruments.
 
@@ -518,7 +518,7 @@ Long-term. Mostly backend work.
 
 **WAM (Web Audio Modules).** Open standard for browser-runnable audio plugins. See [webaudiomodules.org](https://www.webaudiomodules.org/).
 
-**XSS.** Cross-Site Scripting — a vulnerability where user-supplied text is executed as HTML/JS. Solved by treating user input as data, never as markup. Affects Bassmash's `innerHTML = '<div>${trackName}</div>'` patterns once projects are shared.
+**XSS.** Cross-Site Scripting — a vulnerability where user-supplied text is executed as HTML/JS. Solved by treating user input as data, never as markup. Affects M8S's `innerHTML = '<div>${trackName}</div>'` patterns once projects are shared.
 
 ---
 

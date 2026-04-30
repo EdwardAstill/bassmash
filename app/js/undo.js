@@ -148,7 +148,7 @@ export function initUndoRedo({ store } = {}) {
   injectStyle();
 
   // Expose for debugging
-  window.bassmashUndo = { undo, redo, past, future };
+  window.m8sUndo = { undo, redo, past, future };
 }
 
 function injectStyle() {

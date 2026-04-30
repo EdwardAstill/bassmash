@@ -1,4 +1,4 @@
-"""Integration tests for the bassmash CLI. Exercises main.py → ops → store end-to-end."""
+"""Integration tests for the m8s CLI. Exercises main.py → ops → store end-to-end."""
 import json
 
 import pytest
@@ -14,7 +14,7 @@ def runner():
 
 @pytest.fixture
 def projects_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("BASSMASH_PROJECTS_DIR", str(tmp_path))
+    monkeypatch.setenv("M8S_PROJECTS_DIR", str(tmp_path))
     return tmp_path
 
 

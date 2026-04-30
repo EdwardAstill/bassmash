@@ -1,12 +1,12 @@
 # Design Influences
 
-**Purpose.** Pull the best ideas from the DAWs people actually love, reject the ideas that are bad or irrelevant, and synthesise the result into a coherent direction for Bassmash. Not a clone. Not "baby FL." A set of deliberate choices.
+**Purpose.** Pull the best ideas from the DAWs people actually love, reject the ideas that are bad or irrelevant, and synthesise the result into a coherent direction for M8S. Not a clone. Not "baby FL." A set of deliberate choices.
 
 ---
 
 ## 1. Survey of references
 
-For each tool: what the community genuinely praises, what it gets wrong, what â€” if anything â€” Bassmash should adopt.
+For each tool: what the community genuinely praises, what it gets wrong, what â€” if anything â€” M8S should adopt.
 
 ### FL Studio
 
@@ -22,7 +22,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Audio warping is weaker than Ableton/Logic.
 - Stock plugins look dated; UX is crowded.
 
-**Takeaway for Bassmash.**
+**Takeaway for M8S.**
 - Adopt the *universal row* idea: every track is a row in one place. Drums show step cells inline, melodic tracks show a compact piano-roll preview that opens full on click. But **don't call it "Channel Rack"** â€” it's just the track list.
 - Steal piano-roll gestures: ghost notes, strumize/arpeggiate as commands, flip horizontally/vertically.
 - Right-click as a first-class input method for power users.
@@ -39,8 +39,8 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Automation editing clumsier than Logic or Bitwig.
 - MIDI editing is weaker than FL or Cubase.
 
-**Takeaway for Bassmash.**
-- **The Session/Arrangement split is the single biggest UX idea in modern DAWs.** Bassmash should have both: a grid view for sketching ideas, an arrangement view for committing them. They are the same data, two views.
+**Takeaway for M8S.**
+- **The Session/Arrangement split is the single biggest UX idea in modern DAWs.** M8S should have both: a grid view for sketching ideas, an arrangement view for committing them. They are the same data, two views.
 - Warping is table-stakes for any audio workflow. Put it in Phase 5.
 - Follow actions are low cost, high coolness factor. Add post-Phase-5.
 
@@ -56,7 +56,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Less mature third-party plugin ecosystem than Ableton.
 - Fewer tutorials; smaller community.
 
-**Takeaway for Bassmash.**
+**Takeaway for M8S.**
 - **Modulation-drag is revolutionary UX and nobody should ship a new DAW without it.** Design the parameter system so *any* modulator source can be dropped on *any* parameter without a dedicated "automation lane" ceremony.
 - Unified track type: don't force the user to pick "audio track" vs "MIDI track" up front. Infer from content.
 - Nested device chains: add once the effect system is registry-based (Phase 6).
@@ -74,7 +74,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Window management fiddly.
 - Expensive one-time purchase is fine, but project format is closed.
 
-**Takeaway for Bassmash.**
+**Takeaway for M8S.**
 - **Ship good-sounding stock effects and instruments.** A DAW lives or dies by whether your first beat made with only built-ins sounds good.
 - Smart Tempo detection: doable in a web worker with onset detection; worth Phase 5.
 - Drummer-style generators: natural home for the existing `mcp-server/`.
@@ -92,7 +92,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Default UI is spartan-verging-on-ugly.
 - New users hit a wall of options with no opinionated defaults.
 
-**Takeaway for Bassmash.**
+**Takeaway for M8S.**
 - **Transparency and scriptability are the right ethos for an AI-collaborative DAW.** The files-on-disk, CLI-drives-everything architecture already matches this philosophy. Lean into it.
 - Have an opinionated default configuration so a new user isn't drowning. But expose everything.
 - "Nothing is magic" is the right promise: project files are text, every action is a command, every mutation is a diff.
@@ -104,7 +104,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Phrases: reusable rhythmic/melodic units.
 - Niche but passionate user base.
 
-**Takeaway for Bassmash.**
+**Takeaway for M8S.**
 - A *tracker view* of the piano roll is a Phase 4+ stretch goal. Sits naturally alongside the text-file project format â€” a tracker is basically a pattern file displayed in a grid.
 - Keyboard-only editing should be a first-class mode at every view.
 
@@ -114,7 +114,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 - Visible signal flow: flip the rack around and you see the actual patch cables. Huge learning tool.
 - Combinators and the device rack metaphor.
 
-**Takeaway for Bassmash.**
+**Takeaway for M8S.**
 - Consider an *optional* cables-visible view of a track's effect chain â€” not the default, but available. Fits with the "nothing is magic" ethos.
 
 ### Studio One, Cubase, Pro Tools
@@ -130,7 +130,7 @@ For each tool: what the community genuinely praises, what it gets wrong, what â€
 
 ---
 
-## 2. What Bassmash is (and isn't)
+## 2. What M8S is (and isn't)
 
 ### Is
 
@@ -167,7 +167,7 @@ A short list of deliberate choices, each drawn from above.
 
 7. **Keyboard-only mode (from Reaper + Renoise).** Nothing requires the mouse. Phase 3 hotkeys cover this for the primary flows.
 
-8. **CLI / MCP equivalence (Bassmash-native).** Every UI action corresponds to a CLI / MCP command. Running `bassmash-cli tune demo foo` and clicking through the UI to build the same tune produce identical `project.json`.
+8. **CLI / MCP equivalence (M8S-native).** Every UI action corresponds to a CLI / MCP command. Running `m8s-cli tune demo foo` and clicking through the UI to build the same tune produce identical `project.json`.
 
 ---
 

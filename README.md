@@ -1,6 +1,6 @@
-# Bassmash
+# m8s
 
-A browser-based DAW with a text-editable project format and an MCP server so AI agents can compose alongside you.
+**m8s** — *music 80s session*. A browser-based DAW with a text-editable project format and an MCP server so AI agents can compose alongside you.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -25,13 +25,13 @@ A browser-based DAW with a text-editable project format and an MCP server so AI 
              │                   │                   │
              └─────────┬─────────┴───────────────────┘
                        ▼
-           ~/bassmash-projects/<name>/project.json
+           ~/m8s-projects/<name>/project.json
 ```
 
 Three authors, one filesystem:
 
 - **Browser** — drag, drop, draw. Autosaves every 2 s (10 s max delay).
-- **CLI** (`bassmash-cli`) — `bpm set`, `track add`, `pattern step-row …`. Shell-scriptable.
+- **CLI** (`m8s-cli`) — `bpm set`, `track add`, `pattern step-row …`. Shell-scriptable.
 - **MCP server** — structured tool calls for AI agents. `generate_beat`, `replicate_from_audio`, `set_track_automation`, `set_synth_params`, and 18 more.
 
 Every write atomically lands in `project.json` via `cli/store.py` (tempfile + fsync + os.replace). Every edit propagates back to the open browser tab within ~500 ms via server-sent events. No reload button.
@@ -41,10 +41,10 @@ Every write atomically lands in `project.json` via `cli/store.py` (tempfile + fs
 ## Quickstart
 
 ```bash
-git clone https://github.com/EdwardAstill/bassmash.git
-cd bassmash
+git clone https://github.com/EdwardAstill/m8s.git
+cd m8s
 uv sync                               # installs Python deps
-uv tool install --editable .          # puts bassmash-cli on PATH
+uv tool install --editable .          # puts m8s-cli on PATH
 bun install                           # optional — only for bun run dev
 bun run dev                           # starts FastAPI on :8000
 # or: uv run uvicorn server.main:app --reload --port 8000
@@ -56,8 +56,8 @@ Click anywhere in the page to unlock audio (browser autoplay policy). Drag a kit
 From another terminal:
 
 ```bash
-bassmash-cli project list
-bassmash-cli bpm set demo-beat 160
+m8s-cli project list
+m8s-cli bpm set demo-beat 160
 ```
 
 The browser tab updates in place — no refresh needed.
@@ -73,23 +73,23 @@ Add to your MCP client config:
 ```json
 {
   "mcpServers": {
-    "bassmash-mcp": {
+    "m8s-mcp": {
       "command": "uv",
-      "args": ["--directory", "/absolute/path/to/bassmash/mcp-server",
+      "args": ["--directory", "/absolute/path/to/m8s/mcp-server",
                "run", "python", "server.py"]
     }
   }
 }
 ```
 
-Restart the client. Tools appear as `mcp__bassmash-mcp__<name>` — see [`docs/mcp.md`](docs/mcp.md) for the full 22-tool catalog.
+Restart the client. Tools appear as `mcp__m8s-mcp__<name>` — see [`docs/mcp.md`](docs/mcp.md) for the full 22-tool catalog.
 
 ---
 
 ## Project layout on disk
 
 ```
-~/bassmash-projects/<name>/
+~/m8s-projects/<name>/
 ├── project.json            # the whole project — see docs/project-format.md
 ├── samples/                # drum one-shots (drop files here; addressable as filename)
 ├── audio/                  # uploaded audio clips — .mp3 .wav .ogg .flac .aif .aiff
@@ -101,8 +101,8 @@ The built-in drum kit ships in `kit/` under the repo and is served at `kit://<fi
 ### Environment overrides
 
 ```bash
-BASSMASH_PROJECTS_DIR=/path/to/projects   # defaults to ~/bassmash-projects
-BASSMASH_KIT_DIR=/path/to/kit             # defaults to <repo>/kit
+M8S_PROJECTS_DIR=/path/to/projects   # defaults to ~/m8s-projects
+M8S_KIT_DIR=/path/to/kit             # defaults to <repo>/kit
 ```
 
 The backend, CLI, and MCP server all honor these — set them in one place and everyone agrees.
@@ -131,13 +131,13 @@ Open `http://localhost:8000`. File menu → Open Project to switch.
 Direct filesystem edits. See [`docs/cli.md`](docs/cli.md) for the full reference.
 
 ```bash
-bassmash-cli project create my-song
-bassmash-cli bpm set my-song 140
-bassmash-cli track add my-song --name Kick --kind sample
-bassmash-cli pattern add-drums my-song --name Beat --steps 16
-bassmash-cli pattern step-row my-song 0 --name Kick \
+m8s-cli project create my-song
+m8s-cli bpm set my-song 140
+m8s-cli track add my-song --name Kick --kind sample
+m8s-cli pattern add-drums my-song --name Beat --steps 16
+m8s-cli pattern step-row my-song 0 --name Kick \
     --sample kit://kick-deep.wav --cells "1000 0000 1000 0000"
-bassmash-cli arrange add my-song --track 0 --pattern 0 --start 0 --length 4
+m8s-cli arrange add my-song --track 0 --pattern 0 --start 0 --length 4
 ```
 
 ---
@@ -251,7 +251,7 @@ Frontend has no automated suite. Use the headless Playwright smoke documented in
 | Symptom | Fix |
 |---|---|
 | Browser silent even after clicking ▶ | Click anywhere in the page *first* — browser autoplay policy requires a user gesture before the `AudioContext` is allowed to `resume()`. |
-| CLI edits don't show in browser | Confirm the browser + server + CLI all resolve the same `$BASSMASH_PROJECTS_DIR`. Default is `~/bassmash-projects`. |
+| CLI edits don't show in browser | Confirm the browser + server + CLI all resolve the same `$M8S_PROJECTS_DIR`. Default is `~/m8s-projects`. |
 | MCP tool not found after code changes | MCP stdio servers don't hot-reload. Restart your MCP client (Claude Desktop / Code) to reload the tool catalog. |
 | "ffmpeg not found" on export | Install ffmpeg system-wide (`sudo apt install ffmpeg`, `brew install ffmpeg`, etc). |
 | Port 8000 in use | `uv run uvicorn server.main:app --port 8001` and open http://localhost:8001. |

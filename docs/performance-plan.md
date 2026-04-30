@@ -1,8 +1,8 @@
-# Bassmash Performance Plan
+# M8S Performance Plan
 
 > **Historical document.** Written before the 9-zone UI rewrite and the 2026-04-19 P1–P3 delivery. Module names in §4 ("The frontend") are stale: the listed `timeline.js`, `piano-roll.js`, `step-sequencer.js`, `mixer-panel.js`, `topbar.js`, `waveform.js`, `export.js` have been removed or replaced. Current audio architecture is documented in [../NEXT_STEPS.md](../NEXT_STEPS.md) — the perf concepts below (scheduler lookahead, offline render, Canvas redraw cost, worklet path) still apply.
 
-**Goal.** Take Bassmash from "works in the browser" to "feels like a professional DAW" — predictable timing, zero audible glitches, smooth UI under load, fast export, and a clear path to native speed when we need it.
+**Goal.** Take M8S from "works in the browser" to "feels like a professional DAW" — predictable timing, zero audible glitches, smooth UI under load, fast export, and a clear path to native speed when we need it.
 
 This document is written assuming **no prior audio or DSP knowledge**. Every term used is defined either inline or in the glossary at the end. Read top-to-bottom the first time; use the table of contents afterwards.
 
@@ -13,7 +13,7 @@ This document is written assuming **no prior audio or DSP knowledge**. Every ter
 1. [What "performance grade" actually means](#1-what-performance-grade-actually-means)
 2. [Audio fundamentals — from scratch](#2-audio-fundamentals--from-scratch)
 3. [How the browser plays audio](#3-how-the-browser-plays-audio)
-4. [How Bassmash works today](#4-how-bassmash-works-today)
+4. [How M8S works today](#4-how-m8s-works-today)
 5. [The twelve work items, in order](#5-the-twelve-work-items-in-order)
 6. [The future native path (Rust / Tauri / WASM)](#6-the-future-native-path-rust--tauri--wasm)
 7. [Glossary](#7-glossary)
@@ -64,7 +64,7 @@ An hour is about 1.3 GB per channel. That's why we care about efficiency.
 
 A **waveform** is the visual shape of that list of samples plotted on a graph — time on the x-axis, sample value (−1 to +1) on the y-axis. When you see the grey squiggly shape inside an audio clip in the timeline, you are looking at a **waveform**.
 
-Because plotting 48,000 points per second would be unreadable, DAWs display a **downsampled** waveform: for every group of, say, 100 samples, store only the maximum value. That's the grey blob you see. Bassmash does this in `app/js/audio/waveform.js` — each cached file has a 500-point `Float32Array` used purely for drawing.
+Because plotting 48,000 points per second would be unreadable, DAWs display a **downsampled** waveform: for every group of, say, 100 samples, store only the maximum value. That's the grey blob you see. M8S does this in `app/js/audio/waveform.js` — each cached file has a 500-point `Float32Array` used purely for drawing.
 
 ### 2.4 Frequency, pitch, and oscillators
 
@@ -77,7 +77,7 @@ An **oscillator** is a software component that generates a repeating wave at a g
 - **sawtooth** — bright, cutting (string-like synth lead)
 - **triangle** — softer square, like a muted sine
 
-Bassmash's `synth.js` creates oscillators via `ctx.createOscillator()` and picks the shape via `osc1.type = 'sawtooth'`.
+M8S's `synth.js` creates oscillators via `ctx.createOscillator()` and picks the shape via `osc1.type = 'sawtooth'`.
 
 ### 2.5 Amplitude and envelope
 
@@ -90,7 +90,7 @@ Every real musical note has a shape over time. A piano note is loud at the start
 - **Sustain** — the volume held while the key is still down
 - **Release** — how long to fade to silence after the key is released
 
-Together these four numbers are called **ADSR**. Bassmash applies ADSR using a chain of gain ramps (`ampEnv.gain.linearRampToValueAtTime(...)` in `synth.js`).
+Together these four numbers are called **ADSR**. M8S applies ADSR using a chain of gain ramps (`ampEnv.gain.linearRampToValueAtTime(...)` in `synth.js`).
 
 ### 2.6 Filters and EQ
 
@@ -101,19 +101,19 @@ A **filter** lets certain frequencies pass through and blocks others.
 - **Band-pass** — keeps only a middle band
 - **Notch** — removes a single narrow band
 
-An **EQ** (short for **equaliser**) is several filters in a row, each with adjustable gain at different frequencies. A 3-band EQ — like the one in Bassmash's `effects.js` — has three bands: **low shelf** (boosts or cuts bass), **peaking mid** (boosts or cuts a middle band), **high shelf** (boosts or cuts treble). EQs are how you make a mix sound "balanced" — e.g. cut the mud around 300 Hz, add sparkle around 10 kHz.
+An **EQ** (short for **equaliser**) is several filters in a row, each with adjustable gain at different frequencies. A 3-band EQ — like the one in M8S's `effects.js` — has three bands: **low shelf** (boosts or cuts bass), **peaking mid** (boosts or cuts a middle band), **high shelf** (boosts or cuts treble). EQs are how you make a mix sound "balanced" — e.g. cut the mud around 300 Hz, add sparkle around 10 kHz.
 
 ### 2.7 Delay, reverb, distortion
 
 - **Delay** — records the signal, plays it back a short time later, optionally feeding it back into itself. This is the echo effect.
 - **Reverb** — simulates a real acoustic space (room, hall, cathedral). Mathematically it's a **convolution** of the input signal with an **impulse response** (IR): a short recording of a physical space that captures how it smears sound over time.
-- **Distortion** — deliberately clips or warps the waveform so the shape is no longer a clean curve. Produces the crunchy, overdriven sound of rock guitar. Bassmash generates a distortion curve in `effects.js` using a function that softens clipping.
+- **Distortion** — deliberately clips or warps the waveform so the shape is no longer a clean curve. Produces the crunchy, overdriven sound of rock guitar. M8S generates a distortion curve in `effects.js` using a function that softens clipping.
 
 ### 2.8 Stereo, pan, mix, master
 
 **Stereo** = two channels, left and right. **Pan** = how much of a sound goes to left versus right (a hard-panned-left hi-hat only comes out the left speaker).
 
-A **mixer channel** is the processing chain for one track: effects → volume → pan → sum into the master bus. The **master bus** is the final stereo output that goes to the speakers and the exported file. Bassmash's `mixer.js` builds exactly this: each `MixerChannel` has its own effects chain, gain node, and pan node, all connected to `engine.masterGain`.
+A **mixer channel** is the processing chain for one track: effects → volume → pan → sum into the master bus. The **master bus** is the final stereo output that goes to the speakers and the exported file. M8S's `mixer.js` builds exactly this: each `MixerChannel` has its own effects chain, gain node, and pan node, all connected to `engine.masterGain`.
 
 ### 2.9 DSP
 
@@ -131,7 +131,7 @@ Browsers provide **Web Audio**, a set of JavaScript APIs designed for real-time 
 OscillatorNode → BiquadFilterNode → GainNode → AudioContext.destination
 ```
 
-Bassmash uses Web Audio heavily: `createOscillator`, `createBiquadFilter`, `createGain`, `createStereoPanner`, `createConvolver`, `createDelay`, `createWaveShaper`, `createBufferSource`, `createAnalyser`. All native to the browser.
+M8S uses Web Audio heavily: `createOscillator`, `createBiquadFilter`, `createGain`, `createStereoPanner`, `createConvolver`, `createDelay`, `createWaveShaper`, `createBufferSource`, `createAnalyser`. All native to the browser.
 
 ### 3.2 The two threads — main vs audio
 
@@ -146,7 +146,7 @@ The audio thread needs new samples on a strict schedule. Typically the sound car
 
 Sometimes you want custom DSP that Web Audio's built-in nodes don't provide. **AudioWorklet** is the API for that. You write a class with a `process(inputs, outputs)` method that the browser calls on the **audio thread** every 128 samples. Your code runs in that tight 2.7 ms window.
 
-Bassmash does **not** currently use AudioWorklet. Everything is built from built-in nodes, which is fine for now but limits us when we need custom meters, analysers, or exotic effects.
+M8S does **not** currently use AudioWorklet. Everything is built from built-in nodes, which is fine for now but limits us when we need custom meters, analysers, or exotic effects.
 
 ### 3.4 Scheduling — the "lookahead" pattern
 
@@ -160,21 +160,21 @@ The trick — popularised by Chris Wilson's article *A Tale of Two Clocks* — i
 
 The gap between wake-up interval (25 ms) and lookahead window (100 ms) means it's OK if the main thread stalls for up to 75 ms without any audible effect — the audio thread already knows what to play.
 
-Bassmash already does this (`engine.js:56-76`, `_lookahead = 0.1`, `_scheduleInterval = 25`). This is correct and does not need to change. It is one of the things Bassmash does right.
+M8S already does this (`engine.js:56-76`, `_lookahead = 0.1`, `_scheduleInterval = 25`). This is correct and does not need to change. It is one of the things M8S does right.
 
 ### 3.5 OfflineAudioContext — rendering faster than real time
 
-`OfflineAudioContext` is a special context that runs the whole audio graph as fast as the CPU allows, writing the output to an `AudioBuffer` rather than the speakers. You use it to bounce (export) a project to a WAV file. Bassmash already uses this in `export.js:15` for export.
+`OfflineAudioContext` is a special context that runs the whole audio graph as fast as the CPU allows, writing the output to an `AudioBuffer` rather than the speakers. You use it to bounce (export) a project to a WAV file. M8S already uses this in `export.js:15` for export.
 
 ### 3.6 WASM — the escape hatch to native speed
 
 **WASM** = **WebAssembly**. A binary format that browsers can execute at roughly C-level speed. You write code in Rust, C++, or AssemblyScript, compile it to `.wasm`, and call it from JavaScript. Inside an AudioWorklet, WASM DSP can be 5–20× faster than equivalent JavaScript.
 
-Bassmash does not use WASM today. It is the future hot-path optimisation (see section 6).
+M8S does not use WASM today. It is the future hot-path optimisation (see section 6).
 
 ---
 
-## 4. How Bassmash works today
+## 4. How M8S works today
 
 A snapshot of the current architecture so the plan makes sense in context.
 
@@ -478,7 +478,7 @@ This is a multi-month effort. Do not start until items 1–11 are done and measu
 
 Three reasons.
 
-1. **The browser is already fast enough for 80 % of what Bassmash wants to be.** Web Audio + `AudioWorklet` + WASM is within 20 % of native for pure DSP throughput. Most of our current performance problems are scheduling, state, and UI concerns — not DSP throughput. Porting the backend to Rust solves none of them.
+1. **The browser is already fast enough for 80 % of what M8S wants to be.** Web Audio + `AudioWorklet` + WASM is within 20 % of native for pure DSP throughput. Most of our current performance problems are scheduling, state, and UI concerns — not DSP throughput. Porting the backend to Rust solves none of them.
 2. **Rewriting costs months, with no user-visible benefit during that time.** Items 1–11 each ship a visible improvement the same week they land.
 3. **The work is not wasted.** The DSP kernels from item 11 are pure Rust and port directly to the Tauri native audio thread. The engine-snapshot refactor from item 10 makes the Tauri port a small wiring exercise rather than an architectural rewrite.
 
@@ -499,21 +499,21 @@ Default to Tauri + existing JS UI if we go native.
 
 **ADSR.** Attack, Decay, Sustain, Release — the four stages of a volume envelope. See §2.5.
 
-**AudioBuffer.** An in-memory `Float32Array` of audio samples, decoded from an MP3/WAV file. Created by `AudioContext.decodeAudioData`. Bassmash caches them in `sampler.js` and `waveform.js`.
+**AudioBuffer.** An in-memory `Float32Array` of audio samples, decoded from an MP3/WAV file. Created by `AudioContext.decodeAudioData`. M8S caches them in `sampler.js` and `waveform.js`.
 
-**AudioContext.** The root object in Web Audio. Owns the audio thread, the master output, and all node instances. Bassmash has one, created in `engine.js:init`.
+**AudioContext.** The root object in Web Audio. Owns the audio thread, the master output, and all node instances. M8S has one, created in `engine.js:init`.
 
 **AudioParam.** A property on a Web Audio node (like `GainNode.gain`) that can be set instantly (`param.value = x`), scheduled (`param.setValueAtTime(x, t)`), or smoothed (`param.setTargetAtTime(x, t, τ)`).
 
 **AudioWorklet.** API for running custom JavaScript (or WASM) DSP on the audio thread. See §3.3.
 
-**Beat.** In Bassmash, a quarter note. The scheduler works in 16th notes (so 4 scheduler ticks per beat). BPM 120 means 120 beats (= 480 scheduler ticks) per minute.
+**Beat.** In M8S, a quarter note. The scheduler works in 16th notes (so 4 scheduler ticks per beat). BPM 120 means 120 beats (= 480 scheduler ticks) per minute.
 
 **BPM.** Beats per minute. Tempo.
 
 **Buffer.** A chunk of samples the sound card expects at once. Smaller buffer = lower latency, higher CPU demand. Typical values: 128, 256, 512 samples.
 
-**Canvas.** An HTML element that gives you a 2D (or WebGL) drawing surface. Bassmash's timeline is one `<canvas>` that redraws itself every frame.
+**Canvas.** An HTML element that gives you a 2D (or WebGL) drawing surface. M8S's timeline is one `<canvas>` that redraws itself every frame.
 
 **Convolution.** The maths behind reverb. Multiplies the input signal with an impulse response across all points in time. Web Audio's `ConvolverNode` does it in hardware-accelerated C++.
 
@@ -537,14 +537,14 @@ Default to Tauri + existing JS UI if we go native.
 
 **Graph.** The network of Web Audio nodes connected by `.connect()` calls. Samples flow through it every block.
 
-**Impulse response (IR).** A short recording (a few seconds) of how a physical space responds to a click. Convolving a dry signal with an IR makes the signal sound like it was played in that space. Bassmash generates a synthetic noise-decay IR as a default reverb (`effects.js:45-54`).
+**Impulse response (IR).** A short recording (a few seconds) of how a physical space responds to a click. Convolving a dry signal with an IR makes the signal sound like it was played in that space. M8S generates a synthetic noise-decay IR as a default reverb (`effects.js:45-54`).
 
 **Latency.** The time between cause and effect. Types:
 - *Output latency.* Sample generated → sound out of speaker.
 - *Input latency.* User action → first sample of new sound.
 - *Round-trip latency.* Input → processing → output.
 
-**Lookahead.** See §3.4. How far into the future the scheduler queues notes. Bassmash uses 100 ms.
+**Lookahead.** See §3.4. How far into the future the scheduler queues notes. M8S uses 100 ms.
 
 **Main thread.** The JavaScript thread that runs UI code. Cannot be blocked for more than ~16 ms without user-visible stutter.
 
@@ -576,7 +576,7 @@ Default to Tauri + existing JS UI if we go native.
 
 **Sampler.** A component that plays back pre-recorded audio samples (drum hits, field recordings, etc.) at scheduled times.
 
-**Scheduler.** The thing that decides what to play when. Bassmash's lives in `engine.js`.
+**Scheduler.** The thing that decides what to play when. M8S's lives in `engine.js`.
 
 **Stereo.** Two-channel audio, left + right.
 

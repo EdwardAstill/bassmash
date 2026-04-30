@@ -1,6 +1,6 @@
 # `project.json` Schema
 
-The on-disk project file. One per project, at `$BASSMASH_PROJECTS_DIR/<name>/project.json`. Read by the browser, the CLI, the MCP server, and the headless MP3 render — they all round-trip through `cli/store.py`'s atomic write (`tempfile + fsync + os.replace`).
+The on-disk project file. One per project, at `$M8S_PROJECTS_DIR/<name>/project.json`. Read by the browser, the CLI, the MCP server, and the headless MP3 render — they all round-trip through `cli/store.py`'s atomic write (`tempfile + fsync + os.replace`).
 
 The authoritative default shape lives in [`cli/store.py::DEFAULT_PROJECT`](../cli/store.py) and matches the TypeScript-ish sketch below.
 
@@ -217,8 +217,8 @@ On project load the browser calls `mixer.setBusFx(busIdx, paramKey, value)` for 
 
 You *can* hand-edit the JSON (it's pretty-printed with 2-space indent). The browser picks up changes via SSE within ~500 ms. Two things to know:
 
-1. **`cli.store.write_project` is atomic** — temp file + rename. Running `bassmash-cli` or the MCP while you also have a `$EDITOR` session open is safe; the browser will reload to the last-written version.
-2. **Indices are load-bearing.** Deleting a track via hand-edit doesn't renumber arrangement `trackIndex` fields. Use `bassmash-cli track rm <project> <idx>` or MCP `delete_track` — both reindex.
+1. **`cli.store.write_project` is atomic** — temp file + rename. Running `m8s-cli` or the MCP while you also have a `$EDITOR` session open is safe; the browser will reload to the last-written version.
+2. **Indices are load-bearing.** Deleting a track via hand-edit doesn't renumber arrangement `trackIndex` fields. Use `m8s-cli track rm <project> <idx>` or MCP `delete_track` — both reindex.
 
 ---
 

@@ -12,7 +12,7 @@
 //   · alt+click       → toggle mute (ghost note) on active cell
 //   · right-click     → reset velocity to 100 (keep cell state)
 //   · + Add row       → append empty row; label is a drop target for
-//                       browser tree items (application/x-bassmash-sample)
+//                       browser tree items (application/x-m8s-sample)
 import { store } from '../../state.js';
 
 const STEP_COUNT = 16;
@@ -138,7 +138,7 @@ export function initPianoRoll({ rootEl }) {
       // Drop target for browser samples
       label.addEventListener('dragover', (e) => {
         if (!e.dataTransfer) return;
-        if (Array.from(e.dataTransfer.types || []).includes('application/x-bassmash-sample')) {
+        if (Array.from(e.dataTransfer.types || []).includes('application/x-m8s-sample')) {
           e.preventDefault();
           label.classList.add('pr-row__label--drop');
         }
@@ -146,7 +146,7 @@ export function initPianoRoll({ rootEl }) {
       label.addEventListener('dragleave', () => label.classList.remove('pr-row__label--drop'));
       label.addEventListener('drop', (e) => {
         label.classList.remove('pr-row__label--drop');
-        const raw = e.dataTransfer?.getData('application/x-bassmash-sample');
+        const raw = e.dataTransfer?.getData('application/x-m8s-sample');
         if (!raw) return;
         e.preventDefault();
         try {

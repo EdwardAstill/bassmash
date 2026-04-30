@@ -1,4 +1,4 @@
-# Bassmash Master Plan
+# M8S Master Plan
 
 **One list, one order.** Every unit of work from the two earlier docs merged into a single sequence with test gates between phases. The CLI appears early so we can exercise each phase programmatically, together.
 
@@ -17,7 +17,7 @@ Read alongside:
 
 ---
 
-## The CLI (`bassmash-cli`)
+## The CLI (`m8s-cli`)
 
 A Python CLI (uv-managed, consistent with the rest of the backend stack) that I (Claude) and you both drive.
 
@@ -25,7 +25,7 @@ A Python CLI (uv-managed, consistent with the rest of the backend stack) that I 
 
 Two layers:
 
-- **Layer 1 — Project-data layer (filesystem-direct).** The CLI edits project files directly in `~/bassmash-projects/<name>/`. No HTTP, no backend needed. Create/delete projects, add/remove tracks, edit patterns, set BPM, manipulate arrangement, copy in samples/audio. The files are the source of truth; the CLI, the backend, and the frontend all read and write the same bytes. Available at the very start of the plan.
+- **Layer 1 — Project-data layer (filesystem-direct).** The CLI edits project files directly in `~/m8s-projects/<name>/`. No HTTP, no backend needed. Create/delete projects, add/remove tracks, edit patterns, set BPM, manipulate arrangement, copy in samples/audio. The files are the source of truth; the CLI, the backend, and the frontend all read and write the same bytes. Available at the very start of the plan.
 - **Layer 2 — Live-app layer.** Backend exposes a `/ws/control` WebSocket. When the frontend is open, it connects. The CLI sends commands (`play`, `stop`, `open-piano-roll`, `click-clip 2`, `set-zoom 1.5`, `snapshot-perf`) to the frontend, which executes them and streams back state + perf HUD numbers. **Requires the frontend running.** Lands in Phase 2, alongside the performance HUD.
 
 **Why filesystem-direct, not HTTP.** Going through FastAPI for file-shape operations is unnecessary ceremony — the backend's job for projects is just "read file, mutate, write file." The CLI can do that itself, faster and with the server off. Backend keeps doing the one thing it genuinely has to do: serve files to the browser and run `ffmpeg` for MP3 export.
@@ -41,19 +41,19 @@ Playwright would work but would be a heavy second runtime, and we'd still need a
 ### Example session
 
 ```
-$ bassmash-cli project create "test-plan-phase-1"
+$ m8s-cli project create "test-plan-phase-1"
 Created project: test-plan-phase-1
-$ bassmash-cli track add-synth --project test-plan-phase-1 --name "Lead"
+$ m8s-cli track add-synth --project test-plan-phase-1 --name "Lead"
 Added track 0: Lead (synth)
-$ bassmash-cli pattern edit-notes --project test-plan-phase-1 --pattern 0 \
+$ m8s-cli pattern edit-notes --project test-plan-phase-1 --pattern 0 \
     --notes "60:0:4,64:4:4,67:8:4"
 Wrote 3 notes to pattern 0
 # — frontend open —
-$ bassmash-cli live play
+$ m8s-cli live play
 Play from beat 0
-$ bassmash-cli live perf
+$ m8s-cli live perf
 {"cpu": 4.2, "voices": 3, "drift_ms": 0.3, "fps": 60, "dropped": 0}
-$ bassmash-cli live export --out /tmp/out.wav --cancel-after 5s
+$ m8s-cli live export --out /tmp/out.wav --cancel-after 5s
 Progress: 100%  | Real-time ratio 8.4x
 Written: /tmp/out.wav (1.2 MB)
 ```
@@ -68,7 +68,7 @@ Phases run in order. Sub-items within a phase can be parallelised if you want, b
 
 Goal: a platform we can reliably build on, and a tool we can test with.
 
-1. **CLI v0 — filesystem-direct editor + audio analysis.** Python `cli/` package. Edits `~/bassmash-projects/<name>/` directly: project CRUD, tracks, patterns (drum rows + notes), arrangement, BPM, sample/audio file management. Atomic writes (tmp + rename). Analysis subcommands (librosa-backed): `bpm`, `key`, `loudness`, `spectrum`, `full`, `batch`, `compare` — detect tempo/key/loudness of any audio file and side-by-side compare our renders against references. Installable via `uv pip install -e .`.
+1. **CLI v0 — filesystem-direct editor + audio analysis.** Python `cli/` package. Edits `~/m8s-projects/<name>/` directly: project CRUD, tracks, patterns (drum rows + notes), arrangement, BPM, sample/audio file management. Atomic writes (tmp + rename). Analysis subcommands (librosa-backed): `bpm`, `key`, `loudness`, `spectrum`, `full`, `batch`, `compare` — detect tempo/key/loudness of any audio file and side-by-side compare our renders against references. Installable via `uv pip install -e .`.
 2. **Switch frontend to TypeScript + Vite.** `app/js/*.js` → `app/src/*.ts` with `tsconfig.json` set to strict. Vite dev server in dev; prod build emits static `dist/` that FastAPI serves. `index.html` moves to `app/src/`.
 3. **Add ESLint + Prettier (or Biome, one tool).** Lint + format gate.
 4. **Add Vitest + Playwright.** `app/src/**/*.test.ts`. One smoke E2E test: open the app, click-create project, assert DOM.
@@ -84,7 +84,7 @@ Goal: a platform we can reliably build on, and a tool we can test with.
 - [ ] `pnpm build` succeeds with zero errors.
 - [ ] `pnpm typecheck` passes strict-mode TS.
 - [ ] `pnpm test` runs and the smoke test passes.
-- [ ] `bassmash-cli project create foo` creates a valid project.
+- [ ] `m8s-cli project create foo` creates a valid project.
 - [ ] Open `foo` in the browser — identical UX to pre-migration.
 - [ ] Kill the server mid-save — `project.json` is either the old or the new content, never half.
 - [ ] Corrupt `project.json` manually — load gives a clear error, not a crash.
@@ -113,7 +113,7 @@ Goal: every mutation is a first-class, reversible command.
 4. **History stack.** Max-depth config. `Ctrl+Z` / `Ctrl+Shift+Z`. Clears on project load.
 5. **Typed event bus.** Replaces the untyped `store.emit(name, detail)`. Events are ADTs. Panels subscribe to exactly what they care about.
 6. **Dev history panel** (debug only, behind `?debug=1`). Live list of recent commands.
-7. **CLI extension — commands.** `bassmash-cli cmd add-track --kind synth --name "Lead"` etc. Dispatches the same commands; works whether or not the frontend is running (layer 1). Round-trip validation: apply commands via CLI, assert the resulting `project.json` matches expected.
+7. **CLI extension — commands.** `m8s-cli cmd add-track --kind synth --name "Lead"` etc. Dispatches the same commands; works whether or not the frontend is running (layer 1). Round-trip validation: apply commands via CLI, assert the resulting `project.json` matches expected.
 
 **Gate 1 — manual + automated tests.**
 
@@ -123,7 +123,7 @@ Goal: every mutation is a first-class, reversible command.
 - [ ] Run 100 random commands via the CLI, then undo 100 times — state exactly matches the starting project.
 - [ ] Copy / cut / paste / delete works for selected clips.
 - [ ] No `obj.x = y` mutations remain outside `commands/`. (Enforced by ESLint rule forbidding direct `store.data.*` writes.)
-- [ ] Saving a project, loading it, and running `bassmash-cli project diff` against the pre-save version reports zero differences.
+- [ ] Saving a project, loading it, and running `m8s-cli project diff` against the pre-save version reports zero differences.
 
 ---
 
@@ -141,16 +141,16 @@ Goal: the audio engine becomes testable and measurable, and we can drive the run
 8. **Unified scheduler for audio clips** (item 6).
 9. **Voice pool + polyphony cap** (item 7).
 10. **WebSocket control channel.** Backend exposes `/ws/control`. Frontend connects on load and registers a small verb handler (`play`, `stop`, `snapshot`, `perf`, `click`, `dispatch-command`).
-11. **CLI v2 — live.** `bassmash-cli live play`, `bassmash-cli live perf`, `bassmash-cli live snapshot`, `bassmash-cli live dispatch '{"kind":"addTrack",...}'`.
+11. **CLI v2 — live.** `m8s-cli live play`, `m8s-cli live perf`, `m8s-cli live snapshot`, `m8s-cli live dispatch '{"kind":"addTrack",...}'`.
 
 **Gate 2 — measurement.**
 
-- [ ] Scheduler drift ≤ 1 ms sustained over 5 minutes of playback (CLI: `bassmash-cli live perf --watch 5m`).
+- [ ] Scheduler drift ≤ 1 ms sustained over 5 minutes of playback (CLI: `m8s-cli live perf --watch 5m`).
 - [ ] No audible glitches through a full-project playback.
 - [ ] Timeline stays at 60 fps during playback on a 40-track test project.
 - [ ] Fader drag produces no zipper noise.
 - [ ] Voice-pool limit holds: firing 1,000 notes in 1 second never allocates above the pool cap.
-- [ ] `bassmash-cli live play` starts audio exactly as clicking play does (state is identical after).
+- [ ] `m8s-cli live play` starts audio exactly as clicking play does (state is identical after).
 - [ ] Scheduler tests pass. 100 % of the public scheduler API is covered.
 
 ---
@@ -194,7 +194,7 @@ Goal: more than one synth, real MIDI, real samples.
 5. **MIDI file import / export.**
 6. **Pattern length independent of clip length.** Pattern repeats to fill clip.
 7. **Pattern variations** — A/B/C/D slots per pattern.
-8. **CLI extension — instruments.** `bassmash-cli inst list`, `bassmash-cli inst set-param ...`.
+8. **CLI extension — instruments.** `m8s-cli inst list`, `m8s-cli inst set-param ...`.
 
 **Gate 4.**
 

@@ -3,11 +3,11 @@
 ## One-time setup
 
 ```bash
-git clone https://github.com/EdwardAstill/bassmash.git
-cd bassmash
+git clone https://github.com/EdwardAstill/m8s.git
+cd m8s
 
 uv sync                               # backend + tests (FastAPI + librosa + pytest)
-uv tool install --editable .          # puts `bassmash-cli` on $PATH (tracks the source)
+uv tool install --editable .          # puts `m8s-cli` on $PATH (tracks the source)
 
 # Optional — only for the `bun run dev` helpers in package.json. The server
 # runs fine via `uv run uvicorn server.main:app` without bun.
@@ -40,10 +40,10 @@ Open `http://localhost:8000`, click anywhere once to unlock audio.
 
 ### Three authoring surfaces
 
-All three converge on `~/bassmash-projects/<name>/project.json` via `cli/store.py`'s atomic write:
+All three converge on `~/m8s-projects/<name>/project.json` via `cli/store.py`'s atomic write:
 
 - **Browser** — direct UI, drag-and-drop, autosaves every 2 s (max-delay 10 s during continuous edits).
-- **CLI** — `bassmash-cli bpm set …` / `pattern step-row …` / etc. See [`cli.md`](./cli.md).
+- **CLI** — `m8s-cli bpm set …` / `pattern step-row …` / etc. See [`cli.md`](./cli.md).
 - **MCP** — structured tool calls for AI agents. See [`mcp.md`](./mcp.md).
 
 Any write fires a server-sent event → open browser tabs re-fetch → inspector focus + selection preserved.
@@ -122,7 +122,7 @@ High-level layers:
        └──────── cli/store.py ─┘        ← single disk-IO authority
                      │
                      ▼
-        ~/bassmash-projects/<n>/project.json   (atomic write)
+        ~/m8s-projects/<n>/project.json   (atomic write)
                      ▲
                      │
        ┌─────────────┴─────────────┐
@@ -219,4 +219,4 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
    - MCP tool → [`mcp.md`](./mcp.md)
    - HTTP endpoint → [`api.md`](./api.md)
    - project.json shape → [`project-format.md`](./project-format.md)
-5. When in doubt, open a draft PR and ping. Bassmash is a personal DAW — the design rope is long, but stability of the store shape, the MCP tool catalog, and the REST API is the contract.
+5. When in doubt, open a draft PR and ping. M8S is a personal DAW — the design rope is long, but stability of the store shape, the MCP tool catalog, and the REST API is the contract.

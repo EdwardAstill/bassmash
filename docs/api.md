@@ -12,7 +12,7 @@ Base URL assumed to be `http://localhost:8000` for the examples below.
 
 ### `GET /api/projects`
 
-List every project with a `project.json` under `$BASSMASH_PROJECTS_DIR`.
+List every project with a `project.json` under `$M8S_PROJECTS_DIR`.
 
 ```bash
 curl http://localhost:8000/api/projects
@@ -176,7 +176,7 @@ curl http://localhost:8000/api/kit
 # 200 → ["kick-808.wav","snare-trap.wav",...]
 ```
 
-Lists entries under `$BASSMASH_KIT_DIR` with extension `.wav` or `.mp3`.
+Lists entries under `$M8S_KIT_DIR` with extension `.wav` or `.mp3`.
 
 ### `GET /api/kit/{filename}`
 
@@ -235,7 +235,7 @@ Every other response uses FastAPI / StaticFiles defaults.
 
 | Variable | Effect |
 |---|---|
-| `BASSMASH_PROJECTS_DIR` | Where projects live. Default `~/bassmash-projects`. |
-| `BASSMASH_KIT_DIR` | Where built-in kit samples live. Default `<repo>/kit`. |
+| `M8S_PROJECTS_DIR` | Where projects live. Default `~/m8s-projects`. |
+| `M8S_KIT_DIR` | Where built-in kit samples live. Default `<repo>/kit`. |
 
 Both are respected by `cli/store.py`, so the server + CLI + MCP all agree.

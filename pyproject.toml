@@ -1,5 +1,5 @@
 [project]
-name = "bassmash"
+name = "m8s"
 version = "0.1.0"
 description = "Modern browser-based DAW with a text-editable, AI-collaborative project format"
 requires-python = ">=3.12"
@@ -21,7 +21,7 @@ dev = [
 ]
 
 [project.scripts]
-bassmash-cli = "cli.main:app"
+m8s-cli = "cli.main:app"
 
 [tool.setuptools.packages.find]
 include = ["server*", "cli*"]

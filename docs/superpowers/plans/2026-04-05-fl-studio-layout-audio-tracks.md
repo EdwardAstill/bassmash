@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rebuild Bassmash's UI as a full FL Studio-style layout (Browser + Channel Rack + Playlist + Mixer) in black & white, and add audio clip track support so users can import vocals/instrumentals, place them on the playlist, and mix them.
+**Goal:** Rebuild M8S's UI as a full FL Studio-style layout (Browser + Channel Rack + Playlist + Mixer) in black & white, and add audio clip track support so users can import vocals/instrumentals, place them on the playlist, and mix them.
 
-**Architecture:** New `index.html` shell with 5 fixed panels replaces the current 3-panel layout. Existing audio/state logic is preserved — only the UI containers move. Audio clips are a new clip type in `store.data.arrangement` (`type: 'audio'`), backed by uploaded files served from `~/bassmash-projects/<project>/audio/`.
+**Architecture:** New `index.html` shell with 5 fixed panels replaces the current 3-panel layout. Existing audio/state logic is preserved — only the UI containers move. Audio clips are a new clip type in `store.data.arrangement` (`type: 'audio'`), backed by uploaded files served from `~/m8s-projects/<project>/audio/`.
 
 **Tech Stack:** Vanilla JS ES modules, Web Audio API, FastAPI (Python), pytest + httpx for server tests. Run tests with `uv run pytest`. Run dev server with `uv run uvicorn server.main:app --reload`.
 
@@ -47,7 +47,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bassmash</title>
+  <title>M8S</title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -1024,7 +1024,7 @@ export function initBrowser(container) {
 
     container.querySelectorAll('.browser-item[data-ref]').forEach(el => {
       el.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/bassmash-audio-ref', el.dataset.ref);
+        e.dataTransfer.setData('text/m8s-audio-ref', el.dataset.ref);
         e.dataTransfer.effectAllowed = 'copy';
         el.classList.add('dragging');
       });
@@ -1308,7 +1308,7 @@ export function initBrowser(container) {
 
     container.querySelectorAll('.browser-item[data-ref]').forEach(el => {
       el.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/bassmash-audio-ref', el.dataset.ref);
+        e.dataTransfer.setData('text/m8s-audio-ref', el.dataset.ref);
         e.dataTransfer.effectAllowed = 'copy';
         el.classList.add('dragging');
       });
@@ -1550,7 +1550,7 @@ import { mixer } from '../audio/mixer.js';
 const playlistEl = document.getElementById('playlist');
 
 playlistEl.addEventListener('dragover', (e) => {
-  const hasBrowserRef = e.dataTransfer.types.includes('text/bassmash-audio-ref');
+  const hasBrowserRef = e.dataTransfer.types.includes('text/m8s-audio-ref');
   const hasFiles = e.dataTransfer.types.includes('Files');
   if (hasBrowserRef || hasFiles) {
     e.preventDefault();
@@ -1564,7 +1564,7 @@ playlistEl.addEventListener('drop', async (e) => {
   const mx = e.clientX - rect.left;
   const dropBeat = Math.max(0, Math.floor((mx - HEADER_WIDTH + scrollX) / BEAT_WIDTH));
 
-  const audioRef = e.dataTransfer.getData('text/bassmash-audio-ref');
+  const audioRef = e.dataTransfer.getData('text/m8s-audio-ref');
   if (audioRef) {
     await _createAudioTrack(audioRef, dropBeat);
     return;

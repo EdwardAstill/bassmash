@@ -1,11 +1,11 @@
-# Bassmash — FL Studio Layout & Audio Track Import
+# M8S — FL Studio Layout & Audio Track Import
 
 **Date:** 2026-04-05  
 **Status:** Approved
 
 ## Overview
 
-Redesign Bassmash to match the FL Studio layout and visual style, and add audio clip track support so users can import a vocal and an instrumental, place them on the playlist, and mix them together.
+Redesign M8S to match the FL Studio layout and visual style, and add audio clip track support so users can import a vocal and an instrumental, place them on the playlist, and mix them together.
 
 ## Decisions
 
@@ -129,7 +129,7 @@ No other colors in the UI. Clip colors in the playlist are all grey variants —
 ```
 
 ### File storage
-- Server stores uploaded audio in `~/bassmash-projects/<project>/audio/`
+- Server stores uploaded audio in `~/m8s-projects/<project>/audio/`
 - New API endpoints:
   - `POST /project/:name/audio` — multipart upload, returns `{ ref: 'filename.mp3' }`
   - `GET /project/:name/audio/:filename` — serves the file
